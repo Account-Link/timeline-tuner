@@ -196,6 +196,22 @@ const tweets = scraper.getTweets('TwitterDev');
 // Fetch the home timeline
 const homeTimeline = await scraper.fetchHomeTimeline(10, ['seenTweetId1','seenTweetId2']);
 
+// Using the updated fetchHomeTimeline with feedback actions
+const homeTimelineWithFeedback = await scraper.fetchHomeTimeline(20, []);
+for (const tweetWithFeedback of homeTimelineWithFeedback) {
+  // Access the tweet data
+  console.log(`Tweet ID: ${tweetWithFeedback.tweet.rest_id}`);
+  
+  // Access the feedback actions (like "don't like" action)
+  if (tweetWithFeedback.feedbackActions?.dontlike) {
+    const dontLikeAction = tweetWithFeedback.feedbackActions.dontlike;
+    console.log(`Don't Like Action Metadata: ${dontLikeAction.actionMetadata}`);
+    
+    // Use the specific action metadata for this tweet when marking it as "don't like"
+    await scraper.unlikeTweet(tweetWithFeedback.tweet.rest_id, dontLikeAction.actionMetadata);
+  }
+}
+
 // Get a user's liked tweets
 const likedTweets = scraper.getLikedTweets('TwitterDev');
 

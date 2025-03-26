@@ -8,8 +8,41 @@ export interface HomeTimelineResponse {
     home: {
       home_timeline_urt: {
         instructions: TimelineInstruction[];
+        responseObjects?: {
+          feedbackActions?: {
+            key: string;
+            value: {
+              feedbackType: string;
+              prompt: string;
+              confirmation: string;
+              feedbackUrl: string;
+              hasUndoAction: boolean;
+              childKeys?: string[];
+              icon?: string;
+              clientEventInfo?: {
+                action: string;
+                element: string;
+              };
+            };
+          }[];
+        };
       };
     };
+  };
+}
+
+export interface TweetWithFeedback {
+  tweet: any;
+  feedbackActions?: {
+    dontLike?: {
+      feedbackType: string;
+      prompt: string;
+      confirmation: string;
+      feedbackUrl: string;
+      hasUndoAction: boolean;
+      actionMetadata: string;
+    };
+    [key: string]: any;
   };
 }
 
@@ -17,7 +50,7 @@ export async function fetchHomeTimeline(
   count: number,
   seenTweetIds: string[],
   auth: TwitterAuth,
-): Promise<any[]> {
+): Promise<TweetWithFeedback[]> {
   const variables = {
     count,
     includePromotedContent: true,
@@ -69,25 +102,67 @@ export async function fetchHomeTimeline(
     throw res.err;
   }
 
-  const home = res.value?.data?.home.home_timeline_urt?.instructions;
-
-  if (!home) {
+  const home = res.value?.data?.home.home_timeline_urt;
+  
+  if (!home || !home.instructions) {
     return [];
+  }
+
+  // Get feedback actions from response objects
+  const feedbackActionsMap = new Map();
+  if (home.responseObjects && home.responseObjects.feedbackActions) {
+    for (const action of home.responseObjects.feedbackActions) {
+      feedbackActionsMap.set(action.key, action.value);
+    }
   }
 
   const entries: any[] = [];
 
-  for (const instruction of home) {
+  for (const instruction of home.instructions) {
     if (instruction.type === 'TimelineAddEntries') {
       for (const entry of instruction.entries ?? []) {
         entries.push(entry);
       }
     }
   }
-  // get the itemContnent from each entry
-  const tweets = entries
-    .map((entry) => entry.content.itemContent?.tweet_results?.result)
-    .filter((tweet) => tweet !== undefined);
+  
+  // Create tweets with associated feedback actions
+  const tweetsWithFeedback: TweetWithFeedback[] = [];
 
-  return tweets;
+  for (const entry of entries) {
+    const tweet = entry.content.itemContent?.tweet_results?.result;
+    if (!tweet) continue;
+
+    const tweetWithFeedback: TweetWithFeedback = { tweet };
+    
+    // Get feedback keys from the entry if available
+    const feedbackKeys = entry.content.feedbackInfo?.feedbackKeys;
+    if (feedbackKeys && feedbackKeys.length > 0) {
+      const feedbackActions: any = {};
+      
+      for (const key of feedbackKeys) {
+        const action = feedbackActionsMap.get(key);
+        if (action) {
+          // Extract action_metadata from feedbackUrl
+          let actionMetadata = '';
+          if (action.feedbackUrl) {
+            const url = new URL('https://x.com' + action.feedbackUrl);
+            actionMetadata = url.searchParams.get('action_metadata') || '';
+          }
+          
+          // Add the action to the feedback actions with its type as the key
+          feedbackActions[action.feedbackType.toLowerCase()] = {
+            ...action,
+            actionMetadata
+          };
+        }
+      }
+      
+      tweetWithFeedback.feedbackActions = feedbackActions;
+    }
+    
+    tweetsWithFeedback.push(tweetWithFeedback);
+  }
+
+  return tweetsWithFeedback;
 }

@@ -1353,6 +1353,61 @@ export async function likeTweet(
 }
 
 /**
+ * Marks a tweet as "don't like" with the given tweet ID.
+ * @param tweetId The ID of the tweet to mark as "don't like".
+ * @param auth The authentication object.
+ * @param actionMetadata Optional action metadata for the unlike operation.
+ * @returns A promise that resolves when the tweet is marked as "don't like".
+ */
+export async function unlikeTweet(
+  tweetId: string,
+  auth: TwitterAuth,
+  actionMetadata?: string,
+): Promise<void> {
+  // URL for unliking a tweet
+  const unlikeTweetUrl = 'https://twitter.com/i/api/2/timeline/feedback.json';
+
+  // Retrieve necessary cookies and tokens
+  const cookies = await auth.cookieJar().getCookies(unlikeTweetUrl);
+  const xCsrfToken = cookies.find((cookie) => cookie.key === 'ct0');
+
+  const headers = new Headers({
+    authorization: `Bearer ${(auth as any).bearerToken}`,
+    cookie: await auth.cookieJar().getCookieString(unlikeTweetUrl),
+    'content-type': 'application/x-www-form-urlencoded',
+    'x-guest-token': (auth as any).guestToken,
+    'x-twitter-auth-type': 'OAuth2Client',
+    'x-twitter-active-user': 'yes',
+    'x-csrf-token': xCsrfToken?.value as string,
+  });
+
+  // Create URL with query parameters
+  const urlWithParams = new URL(unlikeTweetUrl);
+  urlWithParams.searchParams.set('feedback_type', 'DontLike');
+  urlWithParams.searchParams.set('action_metadata', actionMetadata || 'SSwWnoLbjaOFwu40ACaKGQAWgKD2pxMA');
+
+  // Create form data body
+  const formData = new URLSearchParams();
+  formData.append('feedback_type', 'DontLike');
+  formData.append('undo', 'false');
+
+  // Send the POST request to unlike the tweet
+  const response = await fetch(urlWithParams.toString(), {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+
+  // Update the cookie jar with any new cookies from the response
+  await updateCookieJar(auth.cookieJar(), response.headers);
+
+  // Check for errors in the response
+  if (!response.ok) {
+    throw new Error(await response.text());
+  }
+}
+
+/**
  * Retweets a tweet with the given tweet ID.
  * @param tweetId The ID of the tweet to retweet.
  * @param auth The authentication object.

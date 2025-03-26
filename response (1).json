@@ -1,0 +1,380 @@
+{
+  "data": {
+    "home": {
+      "home_timeline_urt": {
+        "instructions": [
+          {
+            "type": "TimelineAddEntries",
+            "entries": [
+              {
+                "entryId": "tweet-1904616835032707544",
+                "sortIndex": "1904652786218303488",
+                "content": {
+                  "entryType": "TimelineTimelineItem",
+                  "__typename": "TimelineTimelineItem",
+                  "itemContent": {
+                    "itemType": "TimelineTweet",
+                    "__typename": "TimelineTweet",
+                    "tweet_results": {
+                      "result": {
+                        "__typename": "Tweet",
+                        "rest_id": "1904616835032707544",
+                        "core": {
+                          "user_results": {
+                            "result": {
+                              "__typename": "User",
+                              "id": "VXNlcjoxODQxOTg4NjA4ODI1NDY2ODgw",
+                              "rest_id": "1841988608825466880",
+                              "affiliates_highlighted_label": {},
+                              "has_graduated_access": true,
+                              "parody_commentary_fan_label": "None",
+                              "is_blue_verified": true,
+                              "profile_image_shape": "Square",
+                              "legacy": {
+                                "following": false,
+                                "can_dm": false,
+                                "can_media_tag": true,
+                                "created_at": "Thu Oct 03 23:48:27 +0000 2024",
+                                "default_profile": true,
+                                "default_profile_image": false,
+                                "description": "PAC Founded by @ElonMusk to support candidates who champion Secure Borders, Sensible Spending, Safe Cities, Fair Justice System, Free Speech and Self-Protection",
+                                "entities": {
+                                  "description": {
+                                    "urls": []
+                                  },
+                                  "url": {
+                                    "urls": [
+                                      {
+                                        "display_url": "theamericapac.org",
+                                        "expanded_url": "https://theamericapac.org",
+                                        "url": "https://t.co/PdGFm7qcgm",
+                                        "indices": [0, 23]
+                                      }
+                                    ]
+                                  }
+                                },
+                                "fast_followers_count": 0,
+                                "favourites_count": 191,
+                                "followers_count": 1026235,
+                                "friends_count": 0,
+                                "has_custom_timelines": false,
+                                "is_translator": false,
+                                "listed_count": 1673,
+                                "location": "USA",
+                                "media_count": 1040,
+                                "name": "America",
+                                "normal_followers_count": 1026235,
+                                "pinned_tweet_ids_str": ["1902888358432370773"],
+                                "possibly_sensitive": false,
+                                "profile_banner_url": "https://pbs.twimg.com/profile_banners/1841988608825466880/1728002939",
+                                "profile_image_url_https": "https://pbs.twimg.com/profile_images/1842003465448398848/U3EZmdUz_normal.jpg",
+                                "profile_interstitial_type": "",
+                                "screen_name": "america",
+                                "statuses_count": 1602,
+                                "translator_type": "none",
+                                "url": "https://t.co/PdGFm7qcgm",
+                                "verified": false,
+                                "verified_type": "Business",
+                                "want_retweets": false,
+                                "withheld_in_countries": []
+                              },
+                              "tipjar_settings": {}
+                            }
+                          }
+                        },
+                        "unmention_data": {},
+                        "edit_control": {
+                          "edit_tweet_ids": ["1904616835032707544"],
+                          "editable_until_msecs": "1742934614000",
+                          "is_edit_eligible": true,
+                          "edits_remaining": "5"
+                        },
+                        "is_translatable": false,
+                        "views": {
+                          "count": "899264",
+                          "state": "EnabledWithCount"
+                        },
+                        "source": "<a href=\"http://twitter.com/download/iphone\" rel=\"nofollow\">Twitter for iPhone</a>",
+                        "note_tweet": {
+                          "is_expandable": true,
+                          "note_tweet_results": {
+                            "result": {
+                              "id": "Tm90ZVR3ZWV0OjE5MDQ2MTY4MzQ5NDA0OTM4MjQ=",
+                              "text": "President Trump signs an Executive Order enabling the U.S. Treasury to modernize its payments system, in order to reduce waste, fraud and abuse:\n\n– Gets rid of all of the 47 “independent” payment systems and centralizes.\n\n– Makes use of the Do Not Pay list of fraudulent entities mandatory. \n\n – Shares data within government for fraud detection. \n\n– Checks that funds are available in budget before paying. \n\n– Requires budget IDs and EINs.",
+                              "entity_set": {
+                                "hashtags": [],
+                                "symbols": [],
+                                "timestamps": [],
+                                "urls": [],
+                                "user_mentions": []
+                              }
+                            }
+                          }
+                        },
+                        "grok_analysis_button": true,
+                        "legacy": {
+                          "bookmark_count": 513,
+                          "bookmarked": false,
+                          "created_at": "Tue Mar 25 19:30:14 +0000 2025",
+                          "conversation_id_str": "1904616835032707544",
+                          "display_text_range": [0, 279],
+                          "entities": {
+                            "hashtags": [],
+                            "media": [
+                              {
+                                "display_url": "pic.x.com/H7CsFhKRy7",
+                                "expanded_url": "https://x.com/america/status/1904616835032707544/video/1",
+                                "id_str": "1904616768854708224",
+                                "indices": [280, 303],
+                                "media_key": "13_1904616768854708224",
+                                "media_url_https": "https://pbs.twimg.com/amplify_video_thumb/1904616768854708224/img/ZhKNYW8yMCTd8vd4.jpg",
+                                "type": "video",
+                                "url": "https://t.co/H7CsFhKRy7",
+                                "additional_media_info": {
+                                  "monetizable": false
+                                },
+                                "ext_media_availability": {
+                                  "status": "Available"
+                                },
+                                "sizes": {
+                                  "large": {
+                                    "h": 720,
+                                    "w": 1280,
+                                    "resize": "fit"
+                                  },
+                                  "medium": {
+                                    "h": 675,
+                                    "w": 1200,
+                                    "resize": "fit"
+                                  },
+                                  "small": {
+                                    "h": 383,
+                                    "w": 680,
+                                    "resize": "fit"
+                                  },
+                                  "thumb": {
+                                    "h": 150,
+                                    "w": 150,
+                                    "resize": "crop"
+                                  }
+                                },
+                                "original_info": {
+                                  "height": 720,
+                                  "width": 1280,
+                                  "focus_rects": []
+                                },
+                                "allow_download_status": {
+                                  "allow_download": true
+                                },
+                                "video_info": {
+                                  "aspect_ratio": [16, 9],
+                                  "duration_millis": 76976,
+                                  "variants": [
+                                    {
+                                      "content_type": "application/x-mpegURL",
+                                      "url": "https://video.twimg.com/amplify_video/1904616768854708224/pl/1kMjEC8XjVaNwHMe.m3u8?tag=16"
+                                    },
+                                    {
+                                      "bitrate": 288000,
+                                      "content_type": "video/mp4",
+                                      "url": "https://video.twimg.com/amplify_video/1904616768854708224/vid/avc1/480x270/BSE6erqyrZiVN-GF.mp4?tag=16"
+                                    },
+                                    {
+                                      "bitrate": 832000,
+                                      "content_type": "video/mp4",
+                                      "url": "https://video.twimg.com/amplify_video/1904616768854708224/vid/avc1/640x360/x3k62eaZJ8OlInUz.mp4?tag=16"
+                                    },
+                                    {
+                                      "bitrate": 2176000,
+                                      "content_type": "video/mp4",
+                                      "url": "https://video.twimg.com/amplify_video/1904616768854708224/vid/avc1/1280x720/7ZAiCdw4OheVes4s.mp4?tag=16"
+                                    }
+                                  ]
+                                },
+                                "media_results": {
+                                  "result": {
+                                    "media_key": "13_1904616768854708224"
+                                  }
+                                }
+                              }
+                            ],
+                            "symbols": [],
+                            "timestamps": [],
+                            "urls": [],
+                            "user_mentions": []
+                          },
+                          "extended_entities": {
+                            "media": [
+                              {
+                                "display_url": "pic.x.com/H7CsFhKRy7",
+                                "expanded_url": "https://x.com/america/status/1904616835032707544/video/1",
+                                "id_str": "1904616768854708224",
+                                "indices": [280, 303],
+                                "media_key": "13_1904616768854708224",
+                                "media_url_https": "https://pbs.twimg.com/amplify_video_thumb/1904616768854708224/img/ZhKNYW8yMCTd8vd4.jpg",
+                                "type": "video",
+                                "url": "https://t.co/H7CsFhKRy7",
+                                "additional_media_info": {
+                                  "monetizable": false
+                                },
+                                "ext_media_availability": {
+                                  "status": "Available"
+                                },
+                                "sizes": {
+                                  "large": {
+                                    "h": 720,
+                                    "w": 1280,
+                                    "resize": "fit"
+                                  },
+                                  "medium": {
+                                    "h": 675,
+                                    "w": 1200,
+                                    "resize": "fit"
+                                  },
+                                  "small": {
+                                    "h": 383,
+                                    "w": 680,
+                                    "resize": "fit"
+                                  },
+                                  "thumb": {
+                                    "h": 150,
+                                    "w": 150,
+                                    "resize": "crop"
+                                  }
+                                },
+                                "original_info": {
+                                  "height": 720,
+                                  "width": 1280,
+                                  "focus_rects": []
+                                },
+                                "allow_download_status": {
+                                  "allow_download": true
+                                },
+                                "video_info": {
+                                  "aspect_ratio": [16, 9],
+                                  "duration_millis": 76976,
+                                  "variants": [
+                                    {
+                                      "content_type": "application/x-mpegURL",
+                                      "url": "https://video.twimg.com/amplify_video/1904616768854708224/pl/1kMjEC8XjVaNwHMe.m3u8?tag=16"
+                                    },
+                                    {
+                                      "bitrate": 288000,
+                                      "content_type": "video/mp4",
+                                      "url": "https://video.twimg.com/amplify_video/1904616768854708224/vid/avc1/480x270/BSE6erqyrZiVN-GF.mp4?tag=16"
+                                    },
+                                    {
+                                      "bitrate": 832000,
+                                      "content_type": "video/mp4",
+                                      "url": "https://video.twimg.com/amplify_video/1904616768854708224/vid/avc1/640x360/x3k62eaZJ8OlInUz.mp4?tag=16"
+                                    },
+                                    {
+                                      "bitrate": 2176000,
+                                      "content_type": "video/mp4",
+                                      "url": "https://video.twimg.com/amplify_video/1904616768854708224/vid/avc1/1280x720/7ZAiCdw4OheVes4s.mp4?tag=16"
+                                    }
+                                  ]
+                                },
+                                "media_results": {
+                                  "result": {
+                                    "media_key": "13_1904616768854708224"
+                                  }
+                                }
+                              }
+                            ]
+                          },
+                          "favorite_count": 13672,
+                          "favorited": false,
+                          "full_text": "President Trump signs an Executive Order enabling the U.S. Treasury to modernize its payments system, in order to reduce waste, fraud and abuse:\n\n– Gets rid of all of the 47 “independent” payment systems and centralizes.\n\n– Makes use of the Do Not Pay list of fraudulent entities https://t.co/H7CsFhKRy7",
+                          "is_quote_status": false,
+                          "lang": "en",
+                          "possibly_sensitive": false,
+                          "possibly_sensitive_editable": true,
+                          "quote_count": 152,
+                          "reply_count": 865,
+                          "retweet_count": 2394,
+                          "retweeted": false,
+                          "user_id_str": "1841988608825466880",
+                          "id_str": "1904616835032707544"
+                        }
+                      }
+                    },
+                    "tweetDisplayType": "Tweet"
+                  },
+                  "feedbackInfo": {
+                    "feedbackKeys": ["973571766"]
+                  },
+                  "clientEventInfo": {
+                    "component": "for_you_simclusters",
+                    "element": "tweet",
+                    "details": {
+                      "timelinesDetails": {
+                        "injectionType": "ForYouSimclusters",
+                        "controllerData": "DAACDAABDAABCgABAIAAQkIDAAEKAAKAAAAAAAAgAAoACbaBgpBcAZGsCAALAAAAAA8ADAMAAAAZAQADQkIAgAAAIAAAAAAAgAIAAAIAAAAAgAoADuIe6qXeUUyICgAQHDTM/Q4nTNAAAAAA"
+                      }
+                    }
+                  }
+                }
+              }
+            ],
+            "responseObjects": {
+              "feedbackActions": [
+                {
+                  "key": "2035429551",
+                  "value": {
+                    "feedbackType": "SeeFewer",
+                    "prompt": "Show fewer posts from xlr8harder",
+                    "confirmation": "Thanks. You’ll see fewer posts from xlr8harder.",
+                    "feedbackUrl": "/2/timeline/feedback.json?feedback_type=SeeFewer&action_metadata=JQIpHCaCwLGtxbCW4i4AFoCg9qcTAA%3D%3D",
+                    "hasUndoAction": true
+                  }
+                },
+                {
+                  "key": "1175272955",
+                  "value": {
+                    "feedbackType": "DontLike",
+                    "prompt": "Not interested in this post",
+                    "confirmation": "Thanks. X will use this to make your timeline better.",
+                    "childKeys": ["1734901981", "-84116928"],
+                    "feedbackUrl": "/2/timeline/feedback.json?feedback_type=DontLike&action_metadata=SSwWvIC1waTxou40ACaAgLSB6c2LszMAFoCg9qcTAA%3D%3D",
+                    "hasUndoAction": true,
+                    "icon": "Frown",
+                    "clientEventInfo": {
+                      "action": "click",
+                      "element": "feedback_dontlike"
+                    }
+                  }
+                },
+                {
+                  "key": "930728209",
+                  "value": {
+                    "feedbackType": "NotRelevant",
+                    "prompt": "This post isn’t relevant",
+                    "confirmation": "Thanks. You’ll see fewer posts like this.",
+                    "feedbackUrl": "/2/timeline/feedback.json?feedback_type=NotRelevant&action_metadata=SRwW5sK47e2Mu%2B00ABaAoPanEwA%3D",
+                    "hasUndoAction": true
+                  }
+                },
+                {
+                  "key": "-761340023",
+                  "value": {
+                    "feedbackType": "SeeFewer",
+                    "prompt": "Show fewer posts from tenobrus",
+                    "confirmation": "Thanks. You’ll see fewer posts from tenobrus.",
+                    "feedbackUrl": "/2/timeline/feedback.json?feedback_type=SeeFewer&action_metadata=JQIpHCaEwL3Vv4HlxhgAFoCg9qcTAA%3D%3D",
+                    "hasUndoAction": true
+                  }
+                }
+              ]
+            },
+            "metadata": {
+              "scribeConfig": {
+                "page": "for_you"
+              }
+            }
+          }
+        ]
+      }
+    }
+  }
+}

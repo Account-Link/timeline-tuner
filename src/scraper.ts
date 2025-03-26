@@ -52,6 +52,7 @@ import {
   defaultOptions,
   createQuoteTweetRequest,
   likeTweet,
+  unlikeTweet,
   retweet,
   createCreateNoteTweetRequest,
   createCreateLongTweetRequest,
@@ -64,7 +65,7 @@ import {
   TimelineArticle,
   TimelineV2,
 } from './timeline-v2';
-import { fetchHomeTimeline } from './timeline-home';
+import { fetchHomeTimeline, TweetWithFeedback } from './timeline-home';
 import { fetchFollowingTimeline } from './timeline-following';
 import {
   TTweetv2Expansion,
@@ -313,15 +314,15 @@ export class Scraper {
   }
 
   /**
-   * Fetches the home timeline for the current user. (for you feed)
+   * Fetches the home timeline for the current user.
    * @param count The number of tweets to fetch.
    * @param seenTweetIds An array of tweet IDs that have already been seen.
-   * @returns A promise that resolves to the home timeline response.
+   * @returns A promise that resolves to the home timeline response with feedback actions.
    */
   public async fetchHomeTimeline(
     count: number,
     seenTweetIds: string[],
-  ): Promise<any[]> {
+  ): Promise<TweetWithFeedback[]> {
     return await fetchHomeTimeline(count, seenTweetIds, this.auth);
   }
 
@@ -870,6 +871,17 @@ export class Scraper {
   public async likeTweet(tweetId: string): Promise<void> {
     // Call the likeTweet function from tweets.ts
     await likeTweet(tweetId, this.auth);
+  }
+
+  /**
+   * Marks a tweet as "don't like" with the given tweet ID.
+   * @param tweetId The ID of the tweet to mark as "don't like".
+   * @param actionMetadata Optional action metadata for the unlike operation.
+   * @returns A promise that resolves when the tweet is marked as "don't like".
+   */
+  public async unlikeTweet(tweetId: string, actionMetadata?: string): Promise<void> {
+    // Call the unlikeTweet function from tweets.ts
+    await unlikeTweet(tweetId, this.auth, actionMetadata);
   }
 
   /**
