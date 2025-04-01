@@ -387,6 +387,12 @@
   border-radius: 5px;
   padding: 10px;
   margin-top: 15px;
+  position: relative;
+  overflow: hidden;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .engagement-metrics {
@@ -858,6 +864,97 @@
   margin-top: 2rem;
 }
 
+/* Console Analytics Visualization */
+.console-analytics {
+  background-color: #1e1e1e;
+  color: #e0e0e0;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  padding: 20px;
+  border-radius: 8px;
+  margin: 30px 0;
+  white-space: pre-wrap;
+  line-height: 1.4;
+  overflow-x: auto;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+  position: relative;
+}
+
+.console-analytics-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.console-analytics-title {
+  font-size: 1rem;
+  color: #3FA9F5;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+}
+
+.console-analytics-title .icon {
+  margin-right: 8px;
+}
+
+.console-analytics-controls {
+  display: flex;
+  gap: 8px;
+}
+
+.console-analytics-toggle {
+  background: rgba(255, 255, 255, 0.1);
+  border: none;
+  color: #e0e0e0;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.console-analytics-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.console-analytics-content {
+  font-size: 0.85rem;
+}
+
+.console-analytics .green-text {
+  color: #4caf50;
+}
+
+.console-analytics .blue-text {
+  color: #2196f3;
+}
+
+.console-analytics .yellow-text {
+  color: #ffeb3b;
+}
+
+.console-analytics .red-text {
+  color: #f44336;
+}
+
+.console-analytics .purple-text {
+  color: #9c27b0;
+}
+
+.console-analytics .cyan-text {
+  color: #00bcd4;
+}
+
+.console-analytics .progress-bar {
+  color: #3FA9F5;
+}
+
+.console-analytics .section-separator {
+  color: #3FA9F5;
+  margin: 10px 0;
+}
+
 /* Responsive layout */
 @media (max-width: 768px) {
   .dashboard-layout {
@@ -889,5 +986,10 @@
   .analytics-header {
     flex-direction: column;
     gap: 20px;
+  }
+  
+  .console-analytics {
+    font-size: 0.75rem;
+    padding: 15px;
   }
 }

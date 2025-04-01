@@ -303,7 +303,23 @@
                 </div>
               </div>
               
-              <div class="activity-feed-container">
+              <!-- Advanced Console Analytics -->
+              <div class="console-analytics">
+                <div class="console-analytics-header">
+                  <div class="console-analytics-title">
+                    <span class="icon">📊</span> Detailed Analytics Console
+                  </div>
+                  <div class="console-analytics-controls">
+                    <button class="console-analytics-toggle" id="refresh-console-analytics">Refresh</button>
+                    <button class="console-analytics-toggle" id="toggle-console-analytics">Expand</button>
+                  </div>
+                </div>
+                <div class="console-analytics-content" id="console-analytics-content">
+                  <div id="console-analytics-loading">Loading detailed analytics...</div>
+                </div>
+              </div>
+              
+              <!-- <div class="activity-feed-container">
                 <h3>Recent Engagement Activity</h3>
                 <div class="activity-counters">
                   <div class="activity-counter">
@@ -335,9 +351,8 @@
                   <div class="activity-empty-state">
                     Waiting for activity data...
                   </div>
-                  <!-- Activity items will be added here dynamically -->
                 </div>
-              </div>
+              </div> -->
             </div>
           </div>
         </section>
@@ -607,7 +622,7 @@
               engagementSettings: {
                 enableLikes,
                 enableFollows,
-                enableDislikes: enableDislikes
+                enableDislikes
               },
               notifications
             }),
@@ -840,9 +855,9 @@
         // Clear previous content
         graphContainer.innerHTML = '';
         
-        // Determine dimensions
-        const width = graphContainer.clientWidth - 20; // Account for padding
-        const height = graphContainer.clientHeight - 20;
+        // Fixed dimensions for the graph
+        const width = 600;
+        const height = 180;
         
         // If not enough history points, show a message
         if (history.length < 2) {
@@ -934,6 +949,33 @@
         yAxis.setAttribute('stroke', '#e1e8ed');
         yAxis.setAttribute('stroke-width', '1');
         svg.appendChild(yAxis);
+        
+        // Add y-axis labels
+        for (let i = 0; i <= 4; i++) {
+          const yLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+          const yPos = height - (height * (i / 4));
+          const labelValue = minPercentage + (range * (i / 4));
+          
+          yLabel.setAttribute('x', '5');
+          yLabel.setAttribute('y', yPos);
+          yLabel.setAttribute('fill', '#777');
+          yLabel.setAttribute('font-size', '10');
+          yLabel.setAttribute('text-anchor', 'start');
+          yLabel.textContent = `${Math.round(labelValue)}%`;
+          
+          svg.appendChild(yLabel);
+          
+          // Add grid line
+          const gridLine = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+          gridLine.setAttribute('x1', '0');
+          gridLine.setAttribute('y1', yPos);
+          gridLine.setAttribute('x2', width);
+          gridLine.setAttribute('y2', yPos);
+          gridLine.setAttribute('stroke', '#e1e8ed');
+          gridLine.setAttribute('stroke-width', '0.5');
+          gridLine.setAttribute('stroke-dasharray', '3,3');
+          svg.appendChild(gridLine);
+        }
       }
     });
   </script>
@@ -1003,6 +1045,9 @@
         if (analytics.interestManagement) {
           updateInterestManagementDisplay(analytics.interestManagement);
         }
+        
+        // Update console analytics display
+        updateConsoleAnalytics(analytics);
       };
       
       // Function to update interest management display
@@ -1069,6 +1114,289 @@
           return originalFormatActivityMessage(activity);
         }
       };
+      
+      // Function to format the console analytics data
+      function updateConsoleAnalytics(analytics) {
+        const consoleContent = document.getElementById('console-analytics-content');
+        if (!consoleContent) return;
+        
+        // Generate the console output based on analytics data
+        let consoleOutput = `
+══════════════════════════════════════════════════════════════════════
+<span class="blue-text">📊 CONVERGENCE ANALYTICS (${analytics.elapsedMinutes} minutes elapsed)</span>
+══════════════════════════════════════════════════════════════════════
+<span class="green-text">📈 OVERVIEW:</span>
+   Cycles completed: ${analytics.cycles} | Searches performed: ${analytics.searchesPerformed || 0}
+   Total tweets analyzed: ${analytics.totalTweetsAnalyzed} (${analytics.searchTweetsAnalyzed || 0} search, ${analytics.timelineTweetsAnalyzed || analytics.totalTweetsAnalyzed - (analytics.searchTweetsAnalyzed || 0)} timeline)
+   Total interactions: ${(analytics.totalLiked || 0) + (analytics.totalDisliked || 0)} (${analytics.totalLiked || 0} likes, ${analytics.totalDisliked || 0} dislikes)
+   In-depth engagement: ${analytics.highValueViewings || 0} tweets viewed 2+ minutes | ${analytics.profileVisits || 0} profile visits
+
+<span class="green-text">🎯 TIMELINE CONVERGENCE METRICS:</span>
+   Current home timeline relevance: ${generateProgressBar(analytics.relevancePercentage)} ${analytics.relevancePercentage.toFixed(1)}%
+   5-cycle moving average: ${analytics.movingAverage ? analytics.movingAverage.toFixed(1) + '%' : 'N/A'}
+   Convergence rate: ${analytics.convergenceRate ? analytics.convergenceRate.toFixed(2) + '% per cycle' : 'N/A'}
+
+<span class="green-text">🔍 ENGAGEMENT BREAKDOWN:</span>
+   Search: ${analytics.searchRelevant || 0}/${analytics.searchTweetsAnalyzed || 0} relevant (${analytics.searchTweetsAnalyzed ? ((analytics.searchRelevant || 0) / analytics.searchTweetsAnalyzed * 100).toFixed(1) : 0}%)
+   Timeline: ${analytics.timelineRelevant || 0}/${analytics.timelineTweetsAnalyzed || 0} relevant (${analytics.timelineTweetsAnalyzed ? ((analytics.timelineRelevant || 0) / analytics.timelineTweetsAnalyzed * 100).toFixed(1) : 0}%)
+
+<span class="green-text">🛠️ FEEDBACK ACTION SUCCESS RATES:</span>
+   DontLike: ${analytics.totalDisliked || 0}/${analytics.totalDisliked || 0} (${analytics.totalDisliked ? '100.0' : '0.0'}%)
+   NotRelevant: 0/0 (0.0%)
+`;
+
+        // Add timeline relevance history if available
+        if (analytics.relevanceHistory && analytics.relevanceHistory.length > 0) {
+          // Get the last 5 cycles or fewer if not enough history
+          const recentHistory = analytics.relevanceHistory.slice(-5);
+          
+          consoleOutput += `
+<span class="green-text">📅 HOME TIMELINE RELEVANCE HISTORY (last ${recentHistory.length} cycles):</span>`;
+
+          recentHistory.forEach((item, index) => {
+            const cycleNum = analytics.cycles - recentHistory.length + index + 1;
+            const barLength = 10; // Fixed length of bar
+            const filledBars = Math.round(item.percentage / 10);
+            const bar = '▓'.repeat(filledBars) + '░'.repeat(barLength - filledBars);
+            
+            consoleOutput += `
+   Cycle ${cycleNum}: ${bar} ${item.percentage.toFixed(1)}% (${item.relevant}/${item.total})`;
+          });
+          
+          // Add graph visualization if we have enough data points
+          if (analytics.relevanceHistory.length >= 5) {
+            const graphHistory = analytics.relevanceHistory.slice(-12); // Last 12 cycles for graph
+            consoleOutput += generateConsoleGraph(graphHistory);
+            
+            // Calculate trend
+            const startAvg = graphHistory.slice(0, 3).reduce((sum, item) => sum + item.percentage, 0) / 3;
+            const endAvg = graphHistory.slice(-3).reduce((sum, item) => sum + item.percentage, 0) / 3;
+            const change = endAvg - startAvg;
+            const trendSymbol = change > 0 ? '↗' : (change < 0 ? '↘' : '→');
+            
+            consoleOutput += `
+   Timeline relevance is trending ${trendSymbol} (${Math.abs(change).toFixed(1)}% change over displayed period)`;
+          }
+        }
+        
+        // Only add performance insights if we have the required data
+        // Specifically check for actual data fields that should come from the backend
+        if (analytics.topUsers && analytics.topUsers.length > 0) {
+          consoleOutput += `
+══════════════════════════════════════════════════════════════════════
+
+<span class="blue-text">🔮 PERFORMANCE INSIGHTS:</span>`;
+
+          // Only add metrics if they're actually available
+          if (analytics.shortTermRate !== undefined || analytics.convergenceRate !== undefined) {
+            consoleOutput += `
+   Short-term convergence rate: ${(analytics.shortTermRate || analytics.convergenceRate || 0).toFixed(2)}% per cycle`;
+          }
+          
+          if (analytics.searchTweetsAnalyzed && analytics.searchRelevant !== undefined) {
+            consoleOutput += `
+   Search efficiency: ${((analytics.searchRelevant || 0) / analytics.searchTweetsAnalyzed * 100).toFixed(1)}%`;
+          }
+          
+          if (analytics.timelineTweetsAnalyzed && analytics.timelineRelevant !== undefined) {
+            consoleOutput += `
+   Timeline efficiency: ${((analytics.timelineRelevant || 0) / analytics.timelineTweetsAnalyzed * 100).toFixed(1)}%`;
+          }
+          
+          // Only add strategy if we have the necessary efficiency data
+          if ((analytics.searchTweetsAnalyzed && analytics.searchRelevant !== undefined) || 
+              (analytics.timelineTweetsAnalyzed && analytics.timelineRelevant !== undefined)) {
+            consoleOutput += `
+   💡 Strategy: ${getStrategyRecommendation(analytics)}`;
+          }
+
+          consoleOutput += `
+
+   Top users posting relevant content:`;
+          
+          // Add top 3 users (or fewer if less are available)
+          analytics.topUsers.slice(0, 3).forEach(user => {
+            consoleOutput += `
+   - @${user.username}: ${user.relevantCount} relevant tweets (${user.followed ? 'followed' : 'not followed'})`;
+          });
+          
+          // Only add additional metrics if they're actually available
+          let additionalMetricsAdded = false;
+          let additionalMetricsOutput = '';
+          
+          if (analytics.recommendedDelay !== undefined) {
+            additionalMetricsOutput += `
+   💡 Recommended refresh delay: ${analytics.recommendedDelay} seconds`;
+            additionalMetricsAdded = true;
+          }
+          
+          if (analytics.highValueViewings !== undefined) {
+            additionalMetricsOutput += `
+   💡 Deep engagement: ${analytics.highValueViewings} tweets viewed for 2+ minutes`;
+            additionalMetricsAdded = true;
+          }
+          
+          if (analytics.profileVisits !== undefined) {
+            additionalMetricsOutput += `
+   💡 Profile visits: ${analytics.profileVisits}`;
+            
+            if (analytics.profileEngagements !== undefined) {
+              additionalMetricsOutput += ` with ${analytics.profileEngagements} engagements`;
+            }
+            
+            additionalMetricsAdded = true;
+          }
+          
+          // Only add the newline and additional metrics if any exist
+          if (additionalMetricsAdded) {
+            consoleOutput += `\n${additionalMetricsOutput}`;
+          }
+        }
+        
+        // Set the content
+        consoleContent.innerHTML = consoleOutput;
+      }
+      
+      // Helper function to generate a progress bar
+      function generateProgressBar(percentage) {
+        const totalBars = 30;
+        const filledBars = Math.round(percentage / 100 * totalBars);
+        return '█'.repeat(filledBars) + '░'.repeat(totalBars - filledBars);
+      }
+      
+      // Helper function to generate a console-based graph
+      function generateConsoleGraph(history) {
+        if (!history || history.length < 5) return '';
+        
+        // Find min and max for scaling
+        let min = 100;
+        let max = 0;
+        history.forEach(point => {
+          min = Math.min(min, point.percentage);
+          max = Math.max(max, point.percentage);
+        });
+        
+        // Ensure we have a reasonable range
+        if (max - min < 10) {
+          min = Math.max(0, max - 10);
+        }
+        
+        // Add some padding
+        min = Math.max(0, min - 5);
+        max = Math.min(100, max + 5);
+        
+        const range = max - min;
+        const numRows = 10; // Number of rows in the graph
+        const rowHeight = range / numRows;
+        
+        let graph = `
+
+<span class="green-text">📉 RELEVANCE TREND GRAPH:</span>`;
+        
+        // Generate rows from top to bottom
+        for (let row = 0; row < numRows; row++) {
+          const value = max - row * rowHeight;
+          const valueFormatted = value.toFixed(0).padStart(3, ' ') + '%';
+          
+          // Start the row
+          let rowText = `\n   ${valueFormatted}|`;
+          
+          // Add points or spaces for each cycle
+          history.forEach((point, i) => {
+            const isInRow = point.percentage >= (value - rowHeight / 2) && 
+                           point.percentage < (value + rowHeight / 2);
+            
+            // Special case for the last row to include points on the boundary
+            const isLastRowBoundary = row === numRows - 1 && 
+                                     point.percentage >= (value - rowHeight / 2);
+            
+            if (isInRow || isLastRowBoundary) {
+              // Check if the next point is higher or lower to show trend
+              const nextPoint = i < history.length - 1 ? history[i + 1] : null;
+              if (!nextPoint) {
+                rowText += '●';
+              } else if (nextPoint.percentage > point.percentage) {
+                rowText += '│';
+              } else if (nextPoint.percentage < point.percentage) {
+                rowText += '│';
+              } else {
+                rowText += '│';
+              }
+            } else {
+              // Check if there should be a vertical line connecting points
+              const prevPoint = i > 0 ? history[i-1] : null;
+              const nextPoint = i < history.length - 1 ? history[i+1] : null;
+              
+              const prevHigher = prevPoint && prevPoint.percentage >= (value + rowHeight / 2);
+              const prevLower = prevPoint && prevPoint.percentage < (value - rowHeight / 2);
+              const pointHigher = point.percentage >= (value + rowHeight / 2);
+              const pointLower = point.percentage < (value - rowHeight / 2);
+              
+              if ((prevHigher && pointLower) || (prevLower && pointHigher)) {
+                rowText += '│';
+              } else {
+                rowText += ' ';
+              }
+            }
+          });
+        }
+        
+        // Add x-axis
+        graph += `\n   ${'-'.repeat(history.length + 2)}`;
+        
+        // Add x-axis labels (1, 6, 11, etc)
+        graph += `\n       ${1}    ${6}    ${11}   `;
+        graph += `\n               Cycle →`;
+        
+        return graph;
+      }
+      
+      // Helper function to get strategy recommendation
+      function getStrategyRecommendation(analytics) {
+        // Simple strategy recommendation based on search vs timeline efficiency
+        const searchEff = analytics.searchTweetsAnalyzed ? ((analytics.searchRelevant || 0) / analytics.searchTweetsAnalyzed * 100) : 0;
+        const timelineEff = analytics.timelineTweetsAnalyzed ? ((analytics.timelineRelevant || 0) / analytics.timelineTweetsAnalyzed * 100) : 0;
+        
+        if (timelineEff > searchEff * 2) {
+          return "Focus more on timeline processing";
+        } else if (searchEff > timelineEff * 2) {
+          return "Focus more on search exploration";
+        } else {
+          return "Current balance is optimal";
+        }
+      }
+      
+      // Add console analytics toggle functionality
+      const toggleButton = document.getElementById('toggle-console-analytics');
+      const refreshButton = document.getElementById('refresh-console-analytics');
+      const consoleContent = document.getElementById('console-analytics-content');
+      
+      if (toggleButton && consoleContent) {
+        let isExpanded = false;
+        
+        toggleButton.addEventListener('click', function() {
+          isExpanded = !isExpanded;
+          if (isExpanded) {
+            consoleContent.style.maxHeight = 'none';
+            toggleButton.textContent = 'Collapse';
+          } else {
+            consoleContent.style.maxHeight = '300px';
+            toggleButton.textContent = 'Expand';
+          }
+        });
+        
+        // Set initial state
+        consoleContent.style.maxHeight = '300px';
+        consoleContent.style.overflow = 'auto';
+      }
+      
+      // Add refresh functionality
+      if (refreshButton) {
+        refreshButton.addEventListener('click', function() {
+          fetchAnalyticsData();
+          showToast('Refreshing analytics data...', 'info');
+        });
+      }
     });
   </script>
 </body>

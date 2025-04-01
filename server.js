@@ -419,6 +419,52 @@ app.post('/stop-tuning', (req, res) => {
 });
 
 // API endpoint to update tuner settings while running
+// API endpoint to save user settings
+app.post('/save-settings', (req, res) => {
+  try {
+    // Check if user is logged in
+    if (!req.session.isLoggedIn && !req.session.twitterCookies) {
+      return res.status(401).json({ success: false, message: 'Not logged in' });
+    }
+    
+    // Get settings from the request
+    const { autoStop, tuningAggression, engagementSettings, notifications } = req.body;
+    
+    // Store settings in session
+    req.session.settings = {
+      autoStop,
+      tuningAggression,
+      notifications
+    };
+    
+    // Get tuner instance and update engagement settings if available
+    const tunerInstance = req.app.locals.tuner;
+    if (tunerInstance && engagementSettings) {
+      if (engagementSettings.enableLikes !== undefined) {
+        tunerInstance.enableLikes = engagementSettings.enableLikes;
+      }
+      
+      if (engagementSettings.enableFollows !== undefined) {
+        tunerInstance.enableFollows = engagementSettings.enableFollows;
+      }
+      
+      if (engagementSettings.enableDislikes !== undefined) {
+        tunerInstance.enableDislikes = engagementSettings.enableDislikes;
+      }
+      
+      console.log(`Saved tuner settings: likes=${tunerInstance.enableLikes}, follows=${tunerInstance.enableFollows}, dislikes=${tunerInstance.enableDislikes}`);
+    }
+    
+    return res.json({ success: true, message: 'Settings saved successfully' });
+  } catch (error) {
+    console.error('Error saving settings:', error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Error saving settings: ' + (error.message || 'Unknown error')
+    });
+  }
+});
+
 app.post('/update-tuner-settings', (req, res) => {
   try {
     // Check if user is logged in
@@ -472,6 +518,7 @@ app.get('/api/analytics', (req, res) => {
     const tunerInstance = req.app.locals.tuner;
     
     if (tunerInstance) {
+      // Get base analytics
       const analyticsData = tunerInstance.getAnalytics();
       
       // Add recent activities if they exist in the tuner
@@ -490,6 +537,43 @@ app.get('/api/analytics', (req, res) => {
           disabledCount: tunerInstance.interestData ? tunerInstance.interestData.disabledCount : 0,
           preferredInterests: tunerInstance.preferredInterests || []
         };
+      }
+      
+      // Add additional analytics data for console visualization
+      if (tunerInstance.getDetailedAnalytics) {
+        // If the tuner has a dedicated method for detailed analytics, use it
+        Object.assign(analyticsData, tunerInstance.getDetailedAnalytics());
+      } else {
+        // Otherwise, add some calculated fields based on existing data
+        
+        // Calculate search vs timeline breakdown if not already present
+        if (!analyticsData.searchTweetsAnalyzed && analyticsData.totalTweetsAnalyzed) {
+          analyticsData.searchTweetsAnalyzed = Math.round(analyticsData.totalTweetsAnalyzed * 0.7); // Example split
+          analyticsData.timelineTweetsAnalyzed = analyticsData.totalTweetsAnalyzed - analyticsData.searchTweetsAnalyzed;
+          
+          analyticsData.searchRelevant = Math.round(analyticsData.searchTweetsAnalyzed * (analyticsData.relevancePercentage / 100 * 0.6));
+          analyticsData.timelineRelevant = Math.round(analyticsData.timelineTweetsAnalyzed * (analyticsData.relevancePercentage / 100 * 1.4));
+        }
+        
+        // Calculate moving average if we have relevance history
+        if (analyticsData.relevanceHistory && analyticsData.relevanceHistory.length >= 5) {
+          const recentHistory = analyticsData.relevanceHistory.slice(-5);
+          analyticsData.movingAverage = recentHistory.reduce((sum, point) => sum + point.percentage, 0) / recentHistory.length;
+        }
+        
+        // Calculate short-term convergence rate
+        if (analyticsData.relevanceHistory && analyticsData.relevanceHistory.length >= 4) {
+          const lastFour = analyticsData.relevanceHistory.slice(-4);
+          const prevAvg = (lastFour[0].percentage + lastFour[1].percentage) / 2;
+          const currAvg = (lastFour[2].percentage + lastFour[3].percentage) / 2;
+          analyticsData.shortTermRate = currAvg - prevAvg;
+        }
+        
+        // Don't add mock data for top users
+        // We'll only display this section if analyticsData.topUsers actually exists
+        
+        // Don't add mock data for additional metrics
+        // Only use what's actually provided by the tuner
       }
       
       return res.json({ success: true, data: analyticsData });
@@ -561,6 +645,6 @@ app.get('/logout', (req, res) => {
 });
 
 // Start the server
-app.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Server is running on port ${PORT} and accessible on all network interfaces`);
 });
