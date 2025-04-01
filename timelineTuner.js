@@ -433,22 +433,22 @@ export const analytics = {
 };
 
 // LLM-based function to check if text is related to a concept using Hyperbolic API
-export async function isRelatedToConcept(text, concepts) {
+export async function isRelatedToConcept(text, preferences) {
   // Fallback to simple keyword matching if text is too short or API key is missing
   if (!text || !HYPERBOLIC_API_KEY) {
     return false;
   }
   
-  // Convert single concept string to an array for unified processing
-  const conceptArray = Array.isArray(concepts) ? concepts : [concepts];
-  const conceptText = conceptArray.join(', ');
+  // Convert single preference string to an array for unified processing
+  const preferencesArray = Array.isArray(preferences) ? preferences : [preferences];
+  const preferencesText = preferencesArray.join(', ');
   
   try {
     // Prepare the message for the LLM with enhanced preference parsing
     const promptText = `
     Determine if the following tweet text adheres to my preferences of what content I want to see.
     
-    My preferences: "${conceptText}"
+    My preferences: "${preferencesText}"
     
     Note: My preferences may include both what I want to see MORE of and what I want to see LESS of.
     For example, if I said "More Machine Learning, Less Crypto", then show me Machine Learning content and avoid Crypto content.
@@ -488,7 +488,7 @@ export async function isRelatedToConcept(text, concepts) {
     const data = await response.json();
     const answer = data.choices?.[0]?.message?.content.trim().toLowerCase() || '';
     
-    console.log(`LLM judgment for concepts "${conceptText}": ${answer}`);
+    console.log(`LLM judgment for preferences "${preferencesText}": ${answer}`);
     return answer.includes('yes');
     
   } catch (error) {
@@ -1128,7 +1128,7 @@ export function optimizeMemoryUsage(processedTweets, maxSize = 1000) {
 export class TimelineTuner {
   constructor() {
     this.scraper = null;
-    this.concept = null;
+    this.preferences = null;  // Changed from concept to preferences
     this.isRunning = false;
     this.intervalId = null;
     this.processedTweets = new Map();
@@ -1149,6 +1149,10 @@ export class TimelineTuner {
     this.enableFollows = true;   // Whether to follow users with relevant content
     this.enableDislikes = true;  // Whether to provide negative feedback
     
+    // Interest management
+    this.preferredInterests = []; // Interests to keep (others will be disabled)
+    this.lastInterestUpdate = null; // Last time interests were updated
+    
     // Activity tracking
     this.recentActivities = [];
     this.activityCounter = 1;
@@ -1158,6 +1162,7 @@ export class TimelineTuner {
     this.onStatusChanged = null;
     this.onAnalyticsUpdated = null;
     this.onError = null;
+    this.onInterestsUpdated = null;
   }
 
   // Login to Twitter
@@ -1174,7 +1179,7 @@ export class TimelineTuner {
   }
 
   // Start the tuning process
-  async start(concept) {
+  async start(preferences) {
     if (!this.scraper) {
       const error = new Error('Not logged in. Please login first.');
       this.handleError(error);
@@ -1186,20 +1191,20 @@ export class TimelineTuner {
     }
 
     try {
-      // Convert concept string to structured preferences if needed
-      // This allows handling both simple concepts and more/less preferences
-      if (typeof concept === 'string') {
-        // Check if concept contains multiple preferences (using commas)
-        if (concept.includes(',')) {
-          this.concept = concept.split(',').map(pref => pref.trim());
+      // Convert preferences string to structured preferences if needed
+      // This allows handling both simple preferences and more/less preferences
+      if (typeof preferences === 'string') {
+        // Check if preferences contains multiple items (using commas)
+        if (preferences.includes(',')) {
+          this.preferences = preferences.split(',').map(pref => pref.trim());
         } else {
-          this.concept = concept;
+          this.preferences = preferences;
         }
       } else {
-        this.concept = concept;
+        this.preferences = preferences;
       }
       
-      console.log(`Starting tuning with preferences: ${Array.isArray(this.concept) ? this.concept.join(', ') : this.concept}`);
+      console.log(`Starting tuning with preferences: ${Array.isArray(this.preferences) ? this.preferences.join(', ') : this.preferences}`);
       
       this.isRunning = true;
       this.processedTweets = new Map();
@@ -1210,11 +1215,11 @@ export class TimelineTuner {
       analytics.reset();
       
       if (this.onStatusChanged) {
-        this.onStatusChanged(true, this.concept);
+        this.onStatusChanged(true, this.preferences);
       }
       
       // Initial search to bootstrap the process
-      await searchAndLikeRelevantTweets(this.scraper, this.concept, this.processedTweets, this.MAX_SEARCH_TWEETS, this);
+      await searchAndLikeRelevantTweets(this.scraper, this.preferences, this.processedTweets, this.MAX_SEARCH_TWEETS, this);
       
       // Start continuous monitoring
       this.runTuning();
@@ -1238,7 +1243,7 @@ export class TimelineTuner {
     this.isRunning = false;
     
     if (this.onStatusChanged) {
-      this.onStatusChanged(false, this.concept);
+      this.onStatusChanged(false, this.preferences);
     }
     
     return true;
@@ -1249,6 +1254,16 @@ export class TimelineTuner {
     try {
       this.cycleCount++;
       analytics.cycles++;
+      
+      // Check if we should manage interests (once per day)
+      const shouldManageInterests = 
+        !this.lastInterestUpdate || 
+        (Date.now() - this.lastInterestUpdate) > (24 * 60 * 60 * 1000); // 24 hours
+        
+      if (shouldManageInterests) {
+        console.log('\n🧩 Managing Twitter interests...');
+        await this.manageInterests();
+      }
       
       // As convergence improves, adjust search frequency
       let searchThisCycle = false;
@@ -1272,7 +1287,7 @@ export class TimelineTuner {
       // Search for relevant tweets based on dynamic frequency
       if (searchThisCycle) {
         console.log(`\n🔍 Running search at relevance level ${currentRelevance.toFixed(1)}%`);
-        await searchAndLikeRelevantTweets(this.scraper, this.concept, this.processedTweets, this.MAX_SEARCH_TWEETS, this);
+        await searchAndLikeRelevantTweets(this.scraper, this.preferences, this.processedTweets, this.MAX_SEARCH_TWEETS, this);
       }
       
       // Profile visit strategy based on convergence
@@ -1285,7 +1300,7 @@ export class TimelineTuner {
         if (topUsers.length > 0) {
           const topUser = topUsers[0];
           console.log(`\n🔝 Visiting top relevant user @${topUser[0]} (${topUser[1]} relevant tweets)`);
-          await visitProfileAndEngage(this.scraper, topUser[0], this.concept, this);
+          await visitProfileAndEngage(this.scraper, topUser[0], this.preferences, this);
         }
         
         // Periodically visit other relevant users
@@ -1295,7 +1310,7 @@ export class TimelineTuner {
           const randomUser = secondaryUsers[Math.floor(Math.random() * secondaryUsers.length)];
           
           console.log(`\n🔄 Selected secondary user @${randomUser[0]} for profile visit (${randomUser[1]} relevant tweets)`);
-          await visitProfileAndEngage(this.scraper, randomUser[0], this.concept, this);
+          await visitProfileAndEngage(this.scraper, randomUser[0], this.preferences, this);
         }
       }
       
@@ -1336,7 +1351,7 @@ export class TimelineTuner {
         console.log(`Content: ${tweetText.slice(0, 100)}${tweetText.length > 100 ? '...' : ''}`);
         
         // Analyze tweet content with LLM - more aggressive relevance detection
-        let isRelevant = await isRelatedToConcept(tweetText, this.concept);
+        let isRelevant = await isRelatedToConcept(tweetText, this.preferences);
         
         // Track the user if this is relevant content
         if (isRelevant && username) {
@@ -1346,7 +1361,7 @@ export class TimelineTuner {
           analytics.relevantUserCounts[username] = (analytics.relevantUserCounts[username] || 0) + 1;
         }
         
-        console.log(`Related to ${this.concept}: ${isRelevant ? 'Yes' : 'No'}`);
+        console.log(`Related to ${this.preferences}: ${isRelevant ? 'Yes' : 'No'}`);
         
         // Update analytics based on relevance
         if (isRelevant) {
@@ -1404,18 +1419,18 @@ export class TimelineTuner {
           if (relevanceScore >= 3) {
             // High-value user - always visit profile
             console.log(`🌟 High-value timeline user @${username} found (${relevanceScore} relevant posts)`);
-            await visitProfileAndEngage(this.scraper, username, this.concept, this);
+            await visitProfileAndEngage(this.scraper, username, this.preferences, this);
           } else if (relevanceScore >= 2 && Math.random() < 0.5) {
             // Medium-value user - visit with higher probability
-            await visitProfileAndEngage(this.scraper, username, this.concept, this);
+            await visitProfileAndEngage(this.scraper, username, this.preferences, this);
           } else if (relevanceScore === 1 && Math.random() < 0.25) {
             // New relevant user - visit occasionally
-            await visitProfileAndEngage(this.scraper, username, this.concept, this);
+            await visitProfileAndEngage(this.scraper, username, this.preferences, this);
           }
         } else {
           // For irrelevant tweets: Apply negative feedback if enabled
           if (this.enableDislikes) {
-            const feedbackSuccess = await provideAggressiveFeedback(this.scraper, tweetWithFeedback, tweetId, this.concept, this);
+            const feedbackSuccess = await provideAggressiveFeedback(this.scraper, tweetWithFeedback, tweetId, this.preferences, this);
             
             if (feedbackSuccess) {
               processedCount++;
@@ -1602,7 +1617,393 @@ export class TimelineTuner {
 
   // Get current concept
   getConcept() {
-    return this.concept;
+    return this.preferences;
+  }
+
+  // Get current Twitter interests
+  async getCurrentInterests() {
+    try {
+      if (!this.scraper) {
+        throw new Error('Not logged in. Please login first.');
+      }
+
+      // Get cookies needed for authentication
+      const cookieString = await this.scraper.getCookieString();
+      
+      // Extract ct0 and auth_token from cookies
+      const ct0Match = cookieString.match(/ct0=([^;]+)/);
+      const authTokenMatch = cookieString.match(/auth_token=([^;]+)/);
+      
+      if (!ct0Match || !authTokenMatch) {
+        throw new Error('Required cookies (ct0, auth_token) not found. Please log in again.');
+      }
+      
+      const ct0 = ct0Match[1];
+      const authToken = authTokenMatch[1];
+
+      // Fetch current interests
+      const response = await fetch('https://api.x.com/1.1/account/personalization/twitter_interests.json', {
+        headers: {
+          'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
+          'x-csrf-token': ct0,
+          'cookie': `auth_token=${authToken}; ct0=${ct0}`,
+          'x-twitter-auth-type': 'OAuth2Session',
+          'x-twitter-active-user': 'yes',
+          'user-agent': 'Mozilla/5.0',
+          'accept': '*/*',
+          'referer': 'https://x.com/'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch interests: ${response.status} ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      const interests = data.interested_in || [];
+      
+      console.log(`🔍 Found ${interests.length} interests on your account`);
+      return interests;
+    } catch (error) {
+      console.error('Error getting current interests:', error.message);
+      this.handleError(error);
+      return [];
+    }
+  }
+
+  // Filter interests to be disabled using LLM
+  async getDisabledInterestIds(interests) {
+    if (!interests || !Array.isArray(interests) || interests.length === 0) {
+      return [];
+    }
+    
+    // If we don't have preferences or API key, don't disable anything
+    if (!this.preferences || !HYPERBOLIC_API_KEY) {
+      console.log('ℹ️ No preferences or API key defined. No interests will be disabled.');
+      return [];
+    }
+    
+    // Prepare for interest evaluation
+    const toDisable = [];
+    const toKeep = [];
+    const preferencesText = Array.isArray(this.preferences) ? this.preferences.join(', ') : this.preferences;
+    
+    console.log(`\n📊 Evaluating ${interests.length} Twitter interests against your preferences...`);
+    
+    let batchCount = 0;
+    const BATCH_SIZE = 10; // Evaluate interests in batches to avoid too many API calls
+    
+    // Create batches of interests to evaluate together
+    for (let i = 0; i < interests.length; i += BATCH_SIZE) {
+      batchCount++;
+      const batch = interests.slice(i, i + BATCH_SIZE);
+      const interestNames = batch.map(interest => interest.display_name);
+      
+      console.log(`\n🔍 Evaluating batch ${batchCount}: ${interestNames.join(', ')}`);
+      
+      try {
+        // Build a prompt for the LLM to evaluate multiple interests at once
+        const promptText = `
+        I have a set of Twitter interests and need to know which ones to disable based on my content preferences.
+        
+        My content preferences: "${preferencesText}"
+        
+        Note: My preferences include what I want to see MORE of and what I want to see LESS of.
+        For example, if I said "More Machine Learning, Less Crypto", I want to keep Machine Learning related interests and disable Crypto related ones.
+        
+        Here are the Twitter interests to evaluate:
+        ${interestNames.map((name, idx) => `${idx + 1}. ${name}`).join('\n')}
+        
+        For each interest, respond whether I should KEEP or DISABLE it based on my preferences. Use the following format exactly, with one interest per line:
+        1. KEEP/DISABLE
+        2. KEEP/DISABLE
+        ...etc.
+        
+        Only respond with the interest number and KEEP or DISABLE for each interest, nothing else.
+        `;
+      
+        // Call the Hyperbolic API
+        const response = await fetch(HYPERBOLIC_API_URL, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${HYPERBOLIC_API_KEY}`
+          },
+          body: JSON.stringify({
+            model: 'meta-llama/Meta-Llama-3.1-70B-Instruct',
+            messages: [
+              {
+                role: 'user',
+                content: promptText
+              }
+            ],
+            max_tokens: 500,
+            temperature: 0.1,  // Low temperature for deterministic responses
+            top_p: 0.95,
+            stream: false
+          })
+        });
+  
+        if (!response.ok) {
+          console.error(`API error: ${response.status} ${response.statusText}`);
+          continue;
+        }
+  
+        const data = await response.json();
+        const answer = data.choices?.[0]?.message?.content.trim() || '';
+        
+        // Parse the response
+        const lines = answer.split('\n').filter(line => line.trim() !== '');
+        
+        lines.forEach((line, idx) => {
+          if (idx >= batch.length) return; // Safety check
+          
+          const interest = batch[idx];
+          const shouldDisable = line.toLowerCase().includes('disable');
+          
+          if (shouldDisable) {
+            toDisable.push(interest.id);
+            console.log(`   🚫 Disable: ${interest.display_name}`);
+          } else {
+            toKeep.push(interest.display_name);
+            console.log(`   ✅ Keep: ${interest.display_name}`);
+          }
+        });
+      } catch (error) {
+        console.error(`Error evaluating interests batch ${batchCount}:`, error.message);
+        // Continue with next batch in case of error
+      }
+      
+      // Small delay between batches to avoid rate limiting
+      if (i + BATCH_SIZE < interests.length) {
+        await sleep(1000);
+      }
+    }
+    
+    // Log results
+    console.log(`\n🧹 Found ${toDisable.length} interests to disable:`);
+    if (toDisable.length > 0) {
+      console.log(`   Disabling ${toDisable.length} interests based on LLM evaluation`);
+    }
+    
+    console.log(`   Keeping ${toKeep.length} interests that align with your preferences`);
+    
+    return toDisable;
+  }
+
+  // Update Twitter interests by disabling conflicting ones
+  async updateInterests() {
+    try {
+      if (!this.scraper) {
+        throw new Error('Not logged in. Please login first.');
+      }
+      
+      // Get cookies needed for authentication
+      const cookieString = await this.scraper.getCookieString();
+      
+      // Extract ct0 and auth_token from cookies
+      const ct0Match = cookieString.match(/ct0=([^;]+)/);
+      const authTokenMatch = cookieString.match(/auth_token=([^;]+)/);
+      
+      if (!ct0Match || !authTokenMatch) {
+        throw new Error('Required cookies (ct0, auth_token) not found. Please log in again.');
+      }
+      
+      const ct0 = ct0Match[1];
+      const authToken = authTokenMatch[1];
+      
+      // Get current interests and determine which to disable
+      const interests = await this.getCurrentInterests();
+      const disabledIds = await this.getDisabledInterestIds(interests);
+      
+      // If no interests to disable, we're done
+      if (disabledIds.length === 0) {
+        console.log('✅ No interests to disable.');
+        this.lastInterestUpdate = Date.now();
+        return true;
+      }
+      
+      // Create payload to update preferences
+      const payload = {
+        preferences: {
+          interest_preferences: {
+            disabled_interests: disabledIds,
+            disabled_partner_interests: []
+          }
+        }
+      };
+      
+      // Send request to update preferences
+      const response = await fetch('https://api.x.com/1.1/account/personalization/p13n_preferences.json', {
+        method: 'POST',
+        headers: {
+          'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
+          'x-csrf-token': ct0,
+          'cookie': `auth_token=${authToken}; ct0=${ct0}`,
+          'x-twitter-auth-type': 'OAuth2Session',
+          'x-twitter-active-user': 'yes',
+          'content-type': 'application/json',
+          'referer': 'https://x.com/',
+          'user-agent': 'Mozilla/5.0'
+        },
+        body: JSON.stringify(payload)
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Failed to update preferences: ${response.status} - ${errorText}`);
+      }
+      
+      console.log(`✅ Successfully disabled ${disabledIds.length} interests that don't align with your preferences.`);
+      
+      // Add activity record
+      this.trackInterestActivity(disabledIds.length, this.preferredInterests);
+      
+      // Update timestamp
+      this.lastInterestUpdate = Date.now();
+      
+      // Notify listeners if callback exists
+      if (this.onInterestsUpdated) {
+        this.onInterestsUpdated({ 
+          totalInterests: interests.length,
+          disabledCount: disabledIds.length,
+          preferredInterests: this.preferredInterests,
+          timestamp: this.lastInterestUpdate
+        });
+      }
+      
+      return true;
+    } catch (error) {
+      console.error('Error updating interests:', error.message);
+      this.handleError(error);
+      return false;
+    }
+  }
+
+  // Generate preferred interests from user preferences
+  generatePreferredInterestsFromPreferences() {
+    if (!this.preferences) return [];
+    
+    // Convert preference to an array of interests
+    let preferencesArray = [];
+    
+    if (Array.isArray(this.preferences)) {
+      // For complex preferences (more X, less Y), extract only the positive preferences
+      preferencesArray = this.preferences
+        .filter(pref => !pref.toLowerCase().startsWith('less') && !pref.toLowerCase().startsWith('no'))
+        .map(pref => pref.replace(/^more\s+/i, '').trim());
+    } else {
+      // For simple preference
+      preferencesArray = [this.preferences];
+    }
+    
+    // Generate variations of preferences as interests
+    const preferredInterests = [];
+    
+    preferencesArray.forEach(preference => {
+      // Add basic preference
+      preferredInterests.push(preference);
+      
+      // Add with $ prefix (financial topics)
+      if (preference.match(/^[A-Z]{1,5}$/) && !preference.startsWith('$')) {
+        preferredInterests.push(`$${preference}`);
+      }
+      
+      // Add hashtag version
+      const hashtagVersion = preference.replace(/\s+/g, '');
+      if (!hashtagVersion.startsWith('#')) {
+        preferredInterests.push(`#${hashtagVersion}`);
+      }
+      
+      // Add related terms for common topics
+      const lowerPreference = preference.toLowerCase();
+      if (lowerPreference === 'crypto' || lowerPreference === 'cryptocurrency') {
+        preferredInterests.push('Bitcoin', 'Ethereum', '$BTC', '$ETH', 'Web3');
+      } else if (lowerPreference === 'ai' || lowerPreference === 'artificial intelligence') {
+        preferredInterests.push('Machine Learning', 'Deep Learning', 'LLM', 'ChatGPT');
+      }
+    });
+    
+    // Set these as preferred interests
+    this.setPreferredInterests([...new Set(preferredInterests)]); // Deduplicate
+    
+    return this.preferredInterests;
+  }
+
+  // Manage interests as part of tuning process
+  async manageInterests() {
+    try {
+      // Generate preferred interests from preferences if not set
+      if (this.preferredInterests.length === 0 && this.preferences) {
+        this.generatePreferredInterestsFromPreferences();
+      }
+      
+      // Update interests using LLM-based approach
+      return await this.updateInterests();
+    } catch (error) {
+      console.error('Error managing interests:', error.message);
+      this.handleError(error);
+      return false;
+    }
+  }
+
+  // Get current preferences
+  getPreferences() {
+    return this.preferences;
+  }
+
+  // Set preferred interests (interests to keep)
+  setPreferredInterests(interests) {
+    if (!Array.isArray(interests)) {
+      interests = [interests]; // Convert single interest to array
+    }
+    
+    this.preferredInterests = interests;
+    console.log(`📝 Set preferred interests: ${interests.join(', ')}`);
+    return this.preferredInterests;
+  }
+
+  // Track interest update activity
+  trackInterestActivity(disabledCount, keptInterests) {
+    const activity = {
+      id: this.activityCounter++,
+      type: 'interests',
+      disabledCount,
+      keptInterests,
+      timestamp: new Date().toISOString()
+    };
+    
+    this.addActivity(activity);
+    return activity;
+  }
+
+  // Method to display all available cookies (useful for debugging)
+  async getAllCookies() {
+    try {
+      if (!this.scraper) {
+        throw new Error('Not logged in. Please login first.');
+      }
+      
+      const cookieString = await this.scraper.getCookieString();
+      console.log('All cookies:', cookieString);
+      
+      // Parse and format cookies for easier viewing
+      const cookies = {};
+      cookieString.split(';').forEach(cookie => {
+        const parts = cookie.trim().split('=');
+        if (parts.length >= 2) {
+          const key = parts[0];
+          const value = parts.slice(1).join('=');
+          cookies[key] = value;
+        }
+      });
+      
+      return cookies;
+    } catch (error) {
+      console.error('Error getting cookies:', error.message);
+      this.handleError(error);
+      return null;
+    }
   }
 }
 

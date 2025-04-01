@@ -288,7 +288,16 @@ app.get('/dashboard', (req, res) => {
   // Get tuner instance if available
   const tunerInstance = req.app.locals.tuner;
   const isTunerActive = tunerInstance && tunerInstance.isActive();
-  const currentConcept = tunerInstance && tunerInstance.getConcept();
+  
+  // Get current preferences (use getPreferences method, with fallback to getConcept for backwards compatibility)
+  let currentPreferences = '';
+  if (tunerInstance) {
+    if (typeof tunerInstance.getPreferences === 'function') {
+      currentPreferences = tunerInstance.getPreferences();
+    } else if (typeof tunerInstance.getConcept === 'function') {
+      currentPreferences = tunerInstance.getConcept();
+    }
+  }
   
   // Get engagement settings for UI
   const engagementSettings = {
@@ -313,7 +322,7 @@ app.get('/dashboard', (req, res) => {
   res.render('dashboard', { 
     username: req.session.twitterUsername || 'Twitter User',
     isActive: isTunerActive || req.session.tuningActive || false,
-    concept: currentConcept || req.session.concept || '',
+    concept: currentPreferences || req.session.concept || '', // Still use 'concept' key for template compatibility
     engagementSettings
   });
 });
@@ -325,19 +334,21 @@ app.post('/start-tuning', async (req, res) => {
       return res.status(401).json({ success: false, message: 'Not logged in' });
     }
     
-    const { concept } = req.body;
-    if (!concept || concept.trim() === '') {
+    const { concept } = req.body; // Still accepting 'concept' from frontend for backward compatibility
+    const preferences = concept; // Map to 'preferences' for new terminology
+    
+    if (!preferences || preferences.trim() === '') {
       return res.status(400).json({ success: false, message: 'Content preference is required' });
     }
     
-    // Store the concept in the session
-    req.session.concept = concept;
+    // Store the preferences in the session (still using concept key for compatibility)
+    req.session.concept = preferences;
     
     // Get tuner instance
     const tunerInstance = req.app.locals.tuner;
     
     if (tunerInstance && tunerInstance.scraper) {
-      console.log(`Starting timeline tuning with preferences: "${concept}"`);
+      console.log(`Starting timeline tuning with preferences: "${preferences}"`);
       
       // Parse engagement settings from request if available
       const engagementSettings = req.body.engagementSettings || {};
@@ -351,7 +362,7 @@ app.post('/start-tuning', async (req, res) => {
         tunerInstance.enableDislikes = engagementSettings.enableDislikes;
       }
       
-      const startResult = await tunerInstance.start(concept);
+      const startResult = await tunerInstance.start(preferences);
       
       if (startResult) {
         // Mark as active in the session for backup
@@ -469,6 +480,16 @@ app.get('/api/analytics', (req, res) => {
       } else {
         // No mock data
         analyticsData.recentActivities = [];
+      }
+      
+      // Add interest management data if available
+      if (tunerInstance.lastInterestUpdate) {
+        analyticsData.interestManagement = {
+          timestamp: tunerInstance.lastInterestUpdate,
+          totalInterests: tunerInstance.interestData ? tunerInstance.interestData.totalInterests : 0,
+          disabledCount: tunerInstance.interestData ? tunerInstance.interestData.disabledCount : 0,
+          preferredInterests: tunerInstance.preferredInterests || []
+        };
       }
       
       return res.json({ success: true, data: analyticsData });

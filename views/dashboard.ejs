@@ -146,6 +146,9 @@
 
           <div class="tuning-info">
             <h3>How it works</h3>
+            <div class="algorithm-reference">
+              <p>Timeline Tuner applies advanced reinforcement learning principles to optimize your Twitter timeline based on <a href="https://github.com/twitter/the-algorithm" target="_blank">Twitter's open-sourced ranking algorithm</a>. Our system strategically engages with content to train Twitter's algorithm to show more of what you want and less of what you don't.</p>
+            </div>
             <div class="info-grid">
               <div class="info-card">
                 <div class="info-icon">👁️</div>
@@ -167,10 +170,21 @@
                 <h4>Negative Feedback</h4>
                 <p>Marks irrelevant content with "Not interested" to filter out unwanted topics from your feed.</p>
               </div>
+              <div class="info-card">
+                <div class="info-icon">🧩</div>
+                <h4>Interest Management</h4>
+                <p>Automatically optimizes your Twitter interest settings to align with your content preferences.</p>
+              </div>
+              <div class="info-card">
+                <div class="info-icon">🔄</div>
+                <h4>Reinforcement Learning</h4>
+                <p>Uses feedback loops to continuously improve content relevance with each optimization cycle.</p>
+              </div>
             </div>
             
             <div class="tuning-engagement-notice">
               <p><strong>Note:</strong> All engagement actions (views, likes, follows, and negative feedback) are tracked in the Activity Feed under Analytics. You can control which engagement types are used in Settings.</p>
+              <p><strong>About the Algorithm:</strong> Timeline Tuner leverages insights from <a href="https://github.com/twitter/the-algorithm" target="_blank">Twitter's open-sourced recommendation algorithm</a> to optimize how we interact with content. Understanding the weight Twitter places on different types of engagement allows us to efficiently train your timeline.</p>
             </div>
           </div>
         </section>
@@ -251,6 +265,31 @@
                 </div>
               </div>
               
+              <!-- Interest Management Section -->
+              <div class="interest-management-container">
+                <h3>Interest Management</h3>
+                <div class="interest-status">
+                  <div class="interest-status-item">
+                    <div class="metric-label">Interests Managed</div>
+                    <div class="metric-value"><span id="interests-managed">0</span></div>
+                  </div>
+                  <div class="interest-status-item">
+                    <div class="metric-label">Disabled Interests</div>
+                    <div class="metric-value"><span id="interests-disabled">0</span></div>
+                  </div>
+                  <div class="interest-status-item">
+                    <div class="metric-label">Last Updated</div>
+                    <div class="metric-value"><span id="interests-last-updated">Never</span></div>
+                  </div>
+                </div>
+                <div class="preferred-interests" id="preferred-interests">
+                  <p class="interest-label">Preferred Interests:</p>
+                  <div class="interest-tags" id="interest-tags">
+                    <span class="interest-tag-empty">Waiting for data...</span>
+                  </div>
+                </div>
+              </div>
+              
               <div class="activity-feed-container">
                 <h3>Recent Engagement Activity</h3>
                 <div class="activity-counters">
@@ -274,6 +313,9 @@
                   </div>
                   <div class="activity-type-indicator profile">
                     <span class="activity-icon">🔍</span> Profile Visits <span class="type-count" id="profile-type-count">0</span>
+                  </div>
+                  <div class="activity-type-indicator interests">
+                    <span class="activity-icon">🧩</span> Interests <span class="type-count" id="interests-type-count">0</span>
                   </div>
                 </div>
                 <div class="activity-feed" id="activity-feed">
@@ -905,6 +947,7 @@
           follow: 0,
           dislike: 0,
           profile: 0,
+          interests: 0,
           total: activities.length
         };
         
@@ -924,7 +967,92 @@
         document.getElementById('follow-type-count').textContent = activityCounts.follow;
         document.getElementById('dislike-type-count').textContent = activityCounts.dislike;
         document.getElementById('profile-type-count').textContent = activityCounts.profile;
+        document.getElementById('interests-type-count').textContent = activityCounts.interests;
       }
+    });
+  </script>
+  
+  <!-- Interest management script -->
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Add interest management data to analytics update
+      const originalUpdateAnalyticsDisplay = updateAnalyticsDisplay;
+      
+      // Override with enhanced version that includes interest data
+      updateAnalyticsDisplay = function(analytics) {
+        // First call the original function
+        originalUpdateAnalyticsDisplay(analytics);
+        
+        // Then update interest management data if available
+        if (analytics.interestManagement) {
+          updateInterestManagementDisplay(analytics.interestManagement);
+        }
+      };
+      
+      // Function to update interest management display
+      function updateInterestManagementDisplay(interestData) {
+        // Update interest counts
+        if (document.getElementById('interests-managed')) {
+          document.getElementById('interests-managed').textContent = interestData.totalInterests || 0;
+        }
+        
+        if (document.getElementById('interests-disabled')) {
+          document.getElementById('interests-disabled').textContent = interestData.disabledCount || 0;
+        }
+        
+        // Format and display last updated timestamp
+        if (document.getElementById('interests-last-updated') && interestData.timestamp) {
+          const lastUpdated = new Date(interestData.timestamp);
+          const now = new Date();
+          
+          // Check if it was today
+          if (lastUpdated.toDateString() === now.toDateString()) {
+            document.getElementById('interests-last-updated').textContent = 
+              'Today at ' + lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          } else {
+            document.getElementById('interests-last-updated').textContent = 
+              lastUpdated.toLocaleDateString([], { month: 'short', day: 'numeric' }) + 
+              ' at ' + lastUpdated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          }
+        }
+        
+        // Display preferred interests as tags
+        if (document.getElementById('interest-tags') && interestData.preferredInterests) {
+          const interestTags = document.getElementById('interest-tags');
+          
+          // Clear existing content
+          interestTags.innerHTML = '';
+          
+          // Add each interest as a tag
+          if (interestData.preferredInterests.length > 0) {
+            interestData.preferredInterests.forEach(interest => {
+              const tag = document.createElement('span');
+              tag.className = 'interest-tag';
+              tag.textContent = interest;
+              interestTags.appendChild(tag);
+            });
+          } else {
+            // Show empty state
+            const emptyTag = document.createElement('span');
+            emptyTag.className = 'interest-tag-empty';
+            emptyTag.textContent = 'No preferred interests configured';
+            interestTags.appendChild(emptyTag);
+          }
+        }
+      }
+      
+      // Add handling for interest activity items in formatActivityMessage
+      const originalFormatActivityMessage = formatActivityMessage;
+      
+      // Override with enhanced version that includes interest activities
+      formatActivityMessage = function(activity) {
+        if (activity.type === 'interests') {
+          return `🧩 Managed Twitter interests • ${activity.disabledCount || 0} interests disabled`;
+        } else {
+          // Call original function for other activity types
+          return originalFormatActivityMessage(activity);
+        }
+      };
     });
   </script>
 </body>
