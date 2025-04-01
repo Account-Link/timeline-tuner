@@ -678,6 +678,94 @@ footer {
   font-family: 'Lato', sans-serif;
 }
 
+.footer-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+/* Ticker Banner Styles */
+.ticker-banner {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background: linear-gradient(90deg, #1da1f2 0%, #1155cc 100%);
+  color: white;
+  overflow: hidden;
+  height: 30px;
+  z-index: 1000;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+}
+
+.ticker-content {
+  display: flex;
+  width: fit-content;
+  height: 100%;
+  animation: ticker 20s linear infinite;
+}
+
+@keyframes ticker {
+  0% {
+    transform: translateX(0);
+  }
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.ticker-item {
+  display: flex;
+  align-items: center;
+  white-space: nowrap;
+  padding: 0 50px;
+  font-family: 'Montserrat', sans-serif;
+  font-weight: 500;
+  font-size: 0.8rem;
+}
+
+.ticker-item img {
+  height: 18px;
+  width: auto;
+  margin-right: 10px;
+  vertical-align: middle;
+}
+
+.ticker-item a {
+  color: white;
+  text-decoration: none;
+  font-weight: 700;
+  padding: 0 4px;
+  transition: all 0.2s ease;
+  border-bottom: 1px dotted rgba(255, 255, 255, 0.5);
+}
+
+.ticker-item a:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-bottom: 1px solid white;
+}
+
+/* Adjust container padding for the fixed banner */
+.container {
+  padding-top: 50px; /* Add extra padding to account for the ticker */
+}
+
+/* Keep old banner styles for reference but commented out */
+/*
+.teleport-banner {
+  background: linear-gradient(135deg, #1da1f2 0%, #1155cc 100%);
+  color: white;
+  padding: 1.2rem;
+  margin: 2rem 0 1rem;
+  border-radius: 10px;
+  box-shadow: 0 4px 15px rgba(29, 161, 242, 0.2);
+  text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+*/
+
 .disclaimer {
   font-size: 0.85rem;
   margin-top: 0.5rem;

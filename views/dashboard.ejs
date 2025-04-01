@@ -84,6 +84,19 @@
   <!-- Toast notifications container -->
   <div class="toast-container" id="toast-container"></div>
   
+  <div class="ticker-banner">
+    <div class="ticker-content">
+      <div class="ticker-item">
+        <img src="https://teleport.best/_next/image?url=%2Ficons%2Flogo.webp&w=256&q=75" alt="Teleport Logo">
+        Built by <a href="https://teleport.best" target="_blank">Teleport</a> using <a href="https://www.elizaos.ai/" target="_blank">ElizaOS</a>
+      </div>
+      <div class="ticker-item">
+        <img src="https://teleport.best/_next/image?url=%2Ficons%2Flogo.webp&w=256&q=75" alt="Teleport Logo">
+        Built by <a href="https://teleport.best" target="_blank">Teleport</a> using <a href="https://www.elizaos.ai/" target="_blank">ElizaOS</a>
+      </div>
+    </div>
+  </div>
+  
   <div class="container dashboard-container">
     <header>
       <div class="logo">
@@ -409,8 +422,11 @@
       </main>
     </div>
 
+    
     <footer>
-      <p>&copy; <%= new Date().getFullYear() %> Timeline Tuner. Not affiliated with Twitter/X.</p>
+      <div class="footer-content">
+        <p>&copy; <%= new Date().getFullYear() %> Timeline Tuner. Not affiliated with Twitter/X.</p>
+      </div>
     </footer>
   </div>
 
@@ -478,7 +494,7 @@
           // Show loading state
           const startBtn = document.getElementById('start-btn');
           const originalText = startBtn.textContent;
-          startBtn.textContent = 'Starting...';
+          startBtn.textContent = 'Starting... Hit Refresh in 3 seconds';
           startBtn.disabled = true;
 
           // Get engagement settings
