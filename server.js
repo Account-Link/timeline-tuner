@@ -1,14 +1,20 @@
-const express = require('express');
-const session = require('express-session');
-const bodyParser = require('body-parser');
-const cookieParser = require('cookie-parser');
-const path = require('path');
-const passport = require('passport');
-const TwitterStrategy = require('passport-twitter').Strategy;
-const { Scraper } = require('agent-twitter-client');
-const { Cookie } = require('tough-cookie');
-const { tuner } = require('./timelineTuner.js');
-require('dotenv').config();
+import express from 'express';
+import session from 'express-session';
+import bodyParser from 'body-parser';
+import cookieParser from 'cookie-parser';
+import path from 'path';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+import { Scraper } from 'agent-twitter-client';
+import { Cookie } from 'tough-cookie';
+import { tuner } from './timelineTuner.js';
+import dotenv from 'dotenv';
+
+// ES modules fix for __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,46 +31,6 @@ app.use(session({
 }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Initialize passport for OAuth
-app.use(passport.initialize());
-app.use(passport.session());
-
-// Configure Passport
-passport.serializeUser((user, done) => done(null, user));
-passport.deserializeUser((obj, done) => done(null, obj));
-
-// Only configure Twitter OAuth Strategy if keys are present
-const TWITTER_CONSUMER_KEY = process.env.TWITTER_CONSUMER_KEY;
-const TWITTER_CONSUMER_SECRET = process.env.TWITTER_CONSUMER_SECRET;
-const CALLBACK_URL = process.env.CALLBACK_URL || 'http://localhost:3000/auth/twitter/callback';
-
-// Flag to track if OAuth is configured
-const isOAuthConfigured = !!(TWITTER_CONSUMER_KEY && TWITTER_CONSUMER_SECRET);
-
-if (isOAuthConfigured) {
-  console.log('Twitter OAuth is configured and enabled');
-  passport.use(new TwitterStrategy({
-      consumerKey: TWITTER_CONSUMER_KEY,
-      consumerSecret: TWITTER_CONSUMER_SECRET,
-      callbackURL: CALLBACK_URL,
-      includeEmail: true
-    },
-    (token, tokenSecret, profile, done) => {
-      // Save credentials in the user object
-      const user = {
-        id: profile.id,
-        username: profile.username,
-        displayName: profile.displayName,
-        token: token,
-        tokenSecret: tokenSecret
-      };
-      return done(null, user);
-    }
-  ));
-} else {
-  console.log('Twitter OAuth is not configured. One-click login will be disabled.');
-}
-
 // Set EJS as the template engine
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
@@ -78,90 +44,8 @@ app.get('/', (req, res) => {
 app.get('/login', (req, res) => {
   // If error parameter is present, pass it to the template
   const error = req.query.error || null;
-  res.render('login', { error, oauthEnabled: isOAuthConfigured });
+  res.render('login', { error, oauthEnabled: false });
 });
-
-// OAuth routes - only enabled if Twitter keys are configured
-if (isOAuthConfigured) {
-  app.get('/auth/twitter', passport.authenticate('twitter'));
-
-  app.get('/auth/twitter/callback', 
-    passport.authenticate('twitter', { failureRedirect: '/login?error=oauth_failed' }),
-    async (req, res) => {
-      try {
-        // The user credentials are now in req.user
-        req.session.twitterUsername = req.user.username;
-        
-        // Create a scraper
-        const scraper = new Scraper();
-        
-        // We need to access the internal auth property directly since Scraper doesn't expose loginWithV2
-        // The auth property of Scraper is a TwitterAuth instance
-        if (scraper.auth && typeof scraper.auth.loginWithV2 === 'function') {
-          scraper.auth.loginWithV2(
-            TWITTER_CONSUMER_KEY,
-            TWITTER_CONSUMER_SECRET,
-            req.user.token,
-            req.user.tokenSecret
-          );
-        } else {
-          console.log('Using an alternative method to authenticate the Scraper');
-          // Create an auth instance manually
-          const { TwitterUserAuth } = require('agent-twitter-client');
-          const userAuth = new TwitterUserAuth(
-            // Pass the bearer token from the existing auth
-            scraper.auth ? scraper.auth.bearerToken : process.env.BEARER_TOKEN || 'AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA'
-          );
-          
-          // Login with the tokens
-          userAuth.loginWithV2(
-            TWITTER_CONSUMER_KEY,
-            TWITTER_CONSUMER_SECRET, 
-            req.user.token,
-            req.user.tokenSecret
-          );
-          
-          // Replace the auth property
-          scraper.auth = userAuth;
-          scraper.authTrends = userAuth;
-        }
-        
-        // Get cookies from the authenticated scraper and store them
-        const cookies = await scraper.getCookies();
-        console.log('OAuth authenticated user cookies:');
-        cookies.forEach((cookie, index) => {
-          console.log(`Cookie ${index + 1}: ${cookie.key}=${cookie.value.substring(0, 5)}...`);
-        });
-        
-        // Format cookies for session storage
-        req.session.twitterCookies = cookies.map(c => c.toString());
-        console.log(`Total cookies stored in session: ${req.session.twitterCookies.length}`);
-        
-        // Try to get the user profile to confirm authentication worked
-        try {
-          const profile = await scraper.me();
-          if (profile) {
-            console.log(`Successfully authenticated as: ${profile.username}`);
-            req.session.twitterUsername = profile.username;
-          } else {
-            console.log('Authentication succeeded but could not fetch profile');
-          }
-        } catch (profileError) {
-          console.error('Error fetching user profile:', profileError);
-        }
-        
-        res.redirect('/dashboard');
-      } catch (error) {
-        console.error('Error in OAuth callback:', error);
-        res.redirect('/login?error=authentication_failed');
-      }
-    });
-} else {
-  // Fallback routes when OAuth is not configured
-  app.get('/auth/twitter', (req, res) => {
-    res.redirect('/login?error=oauth_not_configured');
-  });
-}
 
 // Login with Twitter credentials
 app.post('/login-with-credentials', async (req, res) => {
