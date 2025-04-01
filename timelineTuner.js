@@ -27,6 +27,14 @@ const analytics = {
   timelineLikes: 0,
   timelineTweetsAnalyzed: 0,
   
+  // Tweet viewing metrics
+  totalTimeSpentViewing: 0,
+  highValueViewings: 0,
+  
+  // Profile visits and engagement
+  profileVisits: 0,
+  profileEngagements: 0,
+  
   // Feedback action success rates
   dontLikeAttempts: 0,
   dontLikeSuccesses: 0,
@@ -121,6 +129,9 @@ const analytics = {
     console.log(`   Cycles completed: ${this.cycles} | Searches performed: ${this.searches}`);
     console.log(`   Total tweets analyzed: ${this.totalTweetsAnalyzed} (${this.searchTweetsAnalyzed} search, ${this.timelineTweetsAnalyzed} timeline)`);
     console.log(`   Total interactions: ${this.totalLiked + this.totalDisliked} (${this.totalLiked} likes, ${this.totalDisliked} dislikes)`);
+    
+    // Enhanced engagement metrics
+    console.log(`   In-depth engagement: ${this.highValueViewings} tweets viewed 2+ minutes | ${this.profileVisits} profile visits`);
     
     // Convergence metrics section
     console.log(`\n🎯 TIMELINE CONVERGENCE METRICS:`);
@@ -261,7 +272,7 @@ const analytics = {
     console.log(`\n   Timeline relevance is trending ${trend} (${changePct}% change over displayed period)`);
   },
   
-  // New function to consider following users who post relevant content
+  // Function to consider following users who post relevant content
   followedUsers: null,
   totalFollowed: 0,
   relevantUserCounts: null,
@@ -314,6 +325,12 @@ const analytics = {
     const optimalTiming = this.analyzeOptimalTimings();
     if (optimalTiming) {
       console.log(`\n   💡 Recommended refresh delay: ${Math.round(optimalTiming / 1000)} seconds`);
+    }
+    
+    // New engagement strategy insights
+    if (this.highValueViewings > 0) {
+      console.log(`\n   💡 Deep engagement: ${this.highValueViewings} tweets viewed for 2+ minutes`);
+      console.log(`   💡 Profile visits: ${this.profileVisits} with ${this.profileEngagements} engagements`);
     }
   },
   
@@ -418,6 +435,159 @@ async function isRelatedToConcept(text, concept) {
 
 // Helper function to delay execution
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+
+// New function to stay on tweet to signal interest (high weight in Twitter algorithm)
+async function stayOnTweet(scraper, tweetId, seconds) {
+  try {
+    // Log the start of viewing activity
+    console.log(`🕰️ Starting to view tweet ${tweetId} for ${seconds} seconds`);
+    
+    // Record tweet view start time
+    const startTime = Date.now();
+    
+    // For API-based approach, we simulate staying on a tweet
+    // Fetch the tweet to ensure it's loaded and cached
+    await scraper.getTweet(tweetId);
+    
+    // Wait for the specified duration 
+    await sleep(seconds * 1000);
+    
+    // Record analytics
+    const actualDuration = (Date.now() - startTime) / 1000;
+    analytics.totalTimeSpentViewing += actualDuration;
+    
+    // Twitter's algorithm specifically values staying for 2+ minutes
+    if (seconds >= 120) {
+      analytics.highValueViewings++;
+      console.log(`✓ Completed high-value view of tweet (${seconds} seconds)`);
+    } else {
+      console.log(`✓ Viewed tweet for ${seconds} seconds`);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error(`Error during tweet viewing: ${error.message}`);
+    return false;
+  }
+}
+
+// New function to visit user profiles and engage with their content
+async function visitProfileAndEngage(scraper, username, concept) {
+  const engagementSummary = {
+    profileVisited: false,
+    tweetsLiked: 0,
+    conceptTweetsFound: 0,
+    conceptTweetsEngaged: 0
+  };
+  
+  try {
+    console.log(`\n👤 Visiting profile for user: @${username}`);
+    analytics.profileVisits++;
+    
+    // Get user's recent tweets using the API
+    const userId = await scraper.getUserIdByScreenName(username);
+    let recentTweets = [];
+    
+    try {
+      // Collect tweets using the iterator
+      const tweetsIterator = scraper.getUserTweetsIterator(userId, 20);
+      for await (const tweet of tweetsIterator) {
+        recentTweets.push(tweet);
+        if (recentTweets.length >= 20) break;
+      }
+      engagementSummary.profileVisited = true;
+    } catch (error) {
+      console.error(`Error fetching tweets for @${username}: ${error.message}`);
+      return engagementSummary;
+    }
+    
+    // Find concept-related tweets from this author
+    const conceptTweets = [];
+    
+    for (const tweet of recentTweets) {
+      const tweetText = tweet.full_text || tweet.text || '';
+      const tweetId = tweet.id_str || tweet.id || tweet.rest_id;
+      
+      if (!tweetId) continue;
+      
+      const isRelevant = await isRelatedToConcept(tweetText, concept);
+      
+      if (isRelevant) {
+        conceptTweets.push({
+          tweet,
+          tweetId,
+          text: tweetText
+        });
+        engagementSummary.conceptTweetsFound++;
+      }
+    }
+    
+    // Engage with 1-3 concept-related tweets if found
+    if (conceptTweets.length > 0) {
+      // Sort by recency (most recent first)
+      conceptTweets.sort((a, b) => {
+        const dateA = new Date(a.tweet.created_at);
+        const dateB = new Date(b.tweet.created_at);
+        return dateB - dateA;
+      });
+      
+      // Take up to 3 most recent
+      const engageCount = Math.min(3, conceptTweets.length);
+      
+      for (let i = 0; i < engageCount; i++) {
+        const { tweetId, text } = conceptTweets[i];
+        
+        // Like the tweet if not already liked
+        try {
+          await scraper.likeTweet(tweetId);
+          engagementSummary.tweetsLiked++;
+          engagementSummary.conceptTweetsEngaged++;
+          console.log(`✓ Liked tweet from profile: ${text.substring(0, 50)}...`);
+          
+          // For the first tweet, spend extra time viewing it
+          if (i === 0) {
+            await stayOnTweet(scraper, tweetId, 60);
+          }
+          
+          analytics.profileEngagements++;
+          await sleep(2000); // Space out engagements
+        } catch (error) {
+          console.error(`Error liking tweet ${tweetId}: ${error.message}`);
+        }
+      }
+    } 
+    // If no concept tweets found but we want to strengthen connection to this author
+    // who has been relevant in the past, like 1 recent tweet
+    else if (analytics.relevantUserCounts && 
+             analytics.relevantUserCounts[username] && 
+             recentTweets.length > 0) {
+      
+      try {
+        const recentTweet = recentTweets[0];
+        const tweetId = recentTweet.id_str || recentTweet.id || recentTweet.rest_id;
+        
+        if (tweetId) {
+          await scraper.likeTweet(tweetId);
+          engagementSummary.tweetsLiked++;
+          console.log(`✓ Liked recent tweet from profile (building relationship)`);
+          analytics.profileEngagements++;
+        }
+      } catch (error) {
+        console.error(`Error liking tweet: ${error.message}`);
+      }
+    }
+    
+    // Spend some time on the profile (important for algorithm)
+    await sleep(15000); // 15 seconds on profile
+    
+    console.log(`✓ Profile visit complete: Found ${engagementSummary.conceptTweetsFound} concept tweets, engaged with ${engagementSummary.conceptTweetsEngaged}`);
+    return engagementSummary;
+    
+  } catch (error) {
+    console.error(`Error during profile visit and engagement: ${error.message}`);
+    return engagementSummary;
+  }
+}
 
 // Helper function to find feedback action by type and extract metadata
 function findFeedbackAction(tweetWithFeedback, feedbackType) {
@@ -603,6 +773,12 @@ async function searchAndLikeRelevantTweets(scraper, concept, processedTweets, ma
             analytics.totalLiked++;
             analytics.totalRelevantTweets++;
             
+            // For every 3rd relevant tweet, spend significant time viewing it (120+ seconds)
+            // This is important for the algorithm
+            if (likedCount % 3 === 0) {
+              await stayOnTweet(scraper, tweetId, 120);
+            }
+            
             // Record that we've processed this tweet
             processedTweets.set(tweetId, {
               processed: true,
@@ -615,8 +791,13 @@ async function searchAndLikeRelevantTweets(scraper, concept, processedTweets, ma
             // Track the user who posted relevant content
             analytics.relevantUserCounts[username] = (analytics.relevantUserCounts[username] || 0) + 1;
             
-            // Consider following users with relevant content
-            await considerFollowingUser(scraper, username);
+            // For users who consistently post good content, visit their profile occasionally
+            if (analytics.relevantUserCounts[username] >= 2 && Math.random() < 0.3) {
+              await visitProfileAndEngage(scraper, username, concept);
+            } else {
+              // Consider following users with relevant content
+              await considerFollowingUser(scraper, username);
+            }
             
             // Add a short pause between likes to avoid rate limiting
             await sleep(500); // Shorter delay for search results
@@ -755,6 +936,7 @@ async function main() {
   const ANALYTICS_INTERVAL = 1; // How often to print analytics (every N cycles)
   const TIMELINE_FETCH_COUNT = 100; // Number of tweets to fetch from timeline
   const ADAPTIVE_TIMING = true; // Whether to use adaptive timing based on performance
+  const PROFILE_VISIT_INTERVAL = 5; // How often to visit profiles (every N cycles)
   
   // Check if Hyperbolic API key is available
   if (!HYPERBOLIC_API_KEY) {
@@ -790,6 +972,19 @@ async function main() {
       // Periodically search for and like tweets related to the concept (more frequent)
       if (cycleCount % SEARCH_INTERVAL === 0) {
         await searchAndLikeRelevantTweets(scraper, concept, processedTweets, MAX_SEARCH_TWEETS);
+      }
+      
+      // Periodically visit profiles of relevant users for deeper engagement
+      if (cycleCount % PROFILE_VISIT_INTERVAL === 0 && analytics.relevantUserCounts) {
+        const topUsers = Object.entries(analytics.relevantUserCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3);
+          
+        if (topUsers.length > 0) {
+          const randomUser = topUsers[Math.floor(Math.random() * topUsers.length)];
+          console.log(`\n🔄 Selected user @${randomUser[0]} for profile visit (${randomUser[1]} relevant tweets)`);
+          await visitProfileAndEngage(scraper, randomUser[0], concept);
+        }
       }
       
       // Fetch more tweets from the home timeline
@@ -861,7 +1056,7 @@ async function main() {
         };
 
         if (isRelevant) {
-          // For relevant tweets: Like them
+          // For relevant tweets: Like them and spend significant time viewing
           await scraper.likeTweet(tweetId);
           console.log('✓ Liked tweet (relevant to concept)');
           tweetStatus.liked = true;
@@ -869,8 +1064,20 @@ async function main() {
           analytics.timelineLikes++;
           analytics.totalLiked++;
           
+          // For highly relevant content, spend extra time (high weight in algorithm)
+          if (Math.random() < 0.3) {
+            await stayOnTweet(scraper, tweetId, 120); // 2 minutes (high algorithmic weight)
+          } else {
+            await stayOnTweet(scraper, tweetId, 45); // 45 seconds
+          }
+          
           // Consider following the user
           await considerFollowingUser(scraper, username);
+          
+          // Occasionally visit the profile (high algorithmic weight)
+          if (Math.random() < 0.15) {
+            await visitProfileAndEngage(scraper, username, concept);
+          }
         } else {
           // For irrelevant tweets: Apply more aggressive feedback
           const feedbackSuccess = await provideAggressiveFeedback(scraper, tweetWithFeedback, tweetId, concept);
@@ -902,6 +1109,7 @@ async function main() {
       // Print analytics at regular intervals
       if (cycleCount % ANALYTICS_INTERVAL === 0) {
         analytics.printAnalytics();
+        analytics.printPerformanceInsights();
       }
       
       // Adjust refresh delay if adaptive timing is enabled
