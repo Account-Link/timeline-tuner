@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Login - Twitter Timeline Tuner</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+  <style>
+    .oauth-section {
+      text-align: center;
+      margin-bottom: 2rem;
+      padding: 2rem;
+      background-color: #ffffff;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    .section-divider {
+      display: flex;
+      align-items: center;
+      margin: 2rem 0;
+      color: #333333;
+      font-family: 'Lato', sans-serif;
+    }
+    .section-divider:before, 
+    .section-divider:after {
+      content: "";
+      flex: 1;
+      border-bottom: 1px solid #e1e8ed;
+    }
+    .section-divider:before {
+      margin-right: 1rem;
+    }
+    .section-divider:after {
+      margin-left: 1rem;
+    }
+    .twitter-login-btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 12px 24px;
+      background-color: #3FA9F5;
+      color: white;
+      border-radius: 30px;
+      font-weight: 600;
+      text-decoration: none;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      transition: all 0.3s;
+      font-family: 'Montserrat', sans-serif;
+    }
+    .twitter-login-btn:hover {
+      background-color: #3697dd;
+      transform: translateY(-2px);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+    }
+    .twitter-login-btn img {
+      margin-right: 10px;
+      width: 24px;
+      height: 24px;
+    }
+    .error-message {
+      background-color: #ffdddd;
+      color: #f44336;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+      border-left: 5px solid #f44336;
+      font-family: 'Lato', sans-serif;
+    }
+    .credentials-form {
+      max-width: 450px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #f8f9fa;
+      border-radius: 8px;
+    }
+    .credentials-form h2 {
+      font-family: 'Montserrat', sans-serif;
+      color: #0078D7;
+      margin-bottom: 1.5rem;
+    }
+    .login-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 100%;
+      margin-top: 15px;
+      padding: 12px;
+      background-color: #3FA9F5;
+      font-weight: 600;
+    }
+    .login-btn:hover {
+      background-color: #3697dd;
+    }
+    .btn-icon {
+      width: 20px;
+      height: 20px;
+      margin-right: 10px;
+    }
+    .login-status {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 5px;
+      text-align: center;
+      font-family: 'Lato', sans-serif;
+    }
+    .login-status.success {
+      background-color: #d4edda;
+      color: #155724;
+    }
+    .login-status.error {
+      background-color: #f8d7da;
+      color: #721c24;
+    }
+    .login-status.loading {
+      background-color: #f0f0f0;
+      color: #333333;
+    }
+    .login-header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    .login-header h2 {
+      font-size: 2.2rem;
+      color: #0078D7;
+      margin-bottom: 1rem;
+      font-weight: 700;
+      font-family: 'Montserrat', sans-serif;
+    }
+    .login-header p {
+      font-size: 1.1rem;
+      color: #333333;
+      max-width: 600px;
+      margin: 0 auto;
+      font-family: 'Lato', sans-serif;
+      font-weight: 300;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <div class="logo-image">T</div>
+        <h1>Timeline Tuner</h1>
+      </div>
+      <div class="nav">
+        <a href="/" class="btn btn-outline">Home</a>
+      </div>
+    </header>
+
+    <main>
+      <div class="login-header">
+        <h2>Connect Your Twitter Account</h2>
+        <p>To begin customizing your Twitter timeline, please log in with your Twitter credentials below.</p>
+      </div>
+
+      <!-- Display error message if it exists -->
+      <% if (typeof error !== 'undefined' && error) { %>
+        <div class="error-message">
+          <% if (error === 'oauth_failed') { %>
+            Authentication with Twitter failed. Please try again.
+          <% } else if (error === 'authentication_failed') { %>
+            We couldn't complete the authentication process. Please try again.
+          <% } else { %>
+            An error occurred: <%= error %>
+          <% } %>
+        </div>
+      <% } %>
+
+      <!-- Twitter Credentials Login Section -->
+      <section class="oauth-section">
+        <h2>Login with Twitter Credentials</h2>
+        <p>Enter your Twitter username and password to connect your account:</p>
+        
+        <form id="credentials-form" class="credentials-form">
+          <div class="form-group">
+            <label for="username">Twitter Username</label>
+            <input type="text" id="username" name="username" placeholder="@username" required autocomplete="username">
+          </div>
+          
+          <div class="form-group">
+            <label for="password">Twitter Password</label>
+            <input type="password" id="password" name="password" required autocomplete="current-password">
+          </div>
+          
+          <div class="form-group">
+            <label for="email">Email (required if your account has email verification)</label>
+            <input type="email" id="email" name="email" placeholder="youremail@example.com" autocomplete="email">
+          </div>
+          
+          <button type="submit" class="btn btn-primary login-btn">
+            <img src="https://about.x.com/content/dam/about-twitter/x/brand-toolkit/logo-black.png.twimg.1920.png" alt="Twitter Logo" class="btn-icon">
+            Log in
+          </button>
+          
+          <div id="login-status" class="login-status"></div>
+        </form>
+      </section>
+
+    <footer>
+      <p>&copy; <%= new Date().getFullYear() %> Timeline Tuner.</p>
+      <p class="disclaimer">Note: We never store your cookies on our servers. They are only kept in your browser session.</p>
+    </footer>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Twitter Credentials form submission
+      const credentialsForm = document.getElementById('credentials-form');
+      const loginStatus = document.getElementById('login-status');
+      
+      if (credentialsForm) {
+        credentialsForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          loginStatus.textContent = 'Logging in...';
+          loginStatus.className = 'login-status loading';
+          
+          const username = document.getElementById('username').value;
+          const password = document.getElementById('password').value;
+          const email = document.getElementById('email').value;
+          
+          fetch('/login-with-credentials', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ username, password, email }),
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              loginStatus.textContent = 'Login successful! Redirecting to dashboard...';
+              loginStatus.className = 'login-status success';
+              setTimeout(() => {
+                window.location.href = '/dashboard';
+              }, 1500);
+            } else {
+              loginStatus.textContent = data.message || 'Login failed. Please check your credentials.';
+              loginStatus.className = 'login-status error';
+            }
+          })
+          .catch(error => {
+            console.error('Error:', error);
+            loginStatus.textContent = 'An error occurred while trying to log in.';
+            loginStatus.className = 'login-status error';
+          });
+        });
+      }
+    });
+  </script>
+</body>
+</html>

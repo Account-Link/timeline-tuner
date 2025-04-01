@@ -1,0 +1,931 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dashboard - Twitter Timeline Tuner</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="/css/dashboard.css">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+  <style>
+    /* Toast notification styles */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 9999;
+    }
+    
+    .toast {
+      padding: 12px 20px;
+      border-radius: 6px;
+      margin-bottom: 10px;
+      color: white;
+      font-family: 'Lato', sans-serif;
+      font-weight: 500;
+      min-width: 250px;
+      max-width: 350px;
+      box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      animation: slideIn 0.3s, fadeOut 0.5s 2.5s forwards;
+    }
+    
+    .toast-success {
+      background-color: var(--success-color);
+    }
+    
+    .toast-error {
+      background-color: var(--danger-color);
+    }
+    
+    .toast-info {
+      background-color: var(--primary-color);
+    }
+    
+    .toast-close {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 16px;
+      cursor: pointer;
+      opacity: 0.7;
+      margin-left: 10px;
+    }
+    
+    .toast-close:hover {
+      opacity: 1;
+    }
+    
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+    
+    @keyframes fadeOut {
+      from {
+        opacity: 1;
+      }
+      to {
+        opacity: 0;
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Toast notifications container -->
+  <div class="toast-container" id="toast-container"></div>
+  
+  <div class="container dashboard-container">
+    <header>
+      <div class="logo">
+        <div class="logo-image">T</div>
+        <h1>Timeline Tuner</h1>
+      </div>
+      <div class="user-info">
+        <span class="username">@<%= username %></span>
+        <a href="/logout" class="btn btn-outline btn-sm">Logout</a>
+      </div>
+    </header>
+
+    <div class="dashboard-layout">
+      <aside class="sidebar">
+        <nav>
+          <ul>
+            <li class="active"><a href="#tuning"><span class="icon">🎯</span> Timeline Tuning</a></li>
+            <li><a href="#analytics"><span class="icon">📊</span> Analytics</a></li>
+            <li><a href="#settings"><span class="icon">⚙️</span> Settings</a></li>
+          </ul>
+        </nav>
+      </aside>
+
+      <main class="dashboard-main">
+        <section id="tuning" class="dashboard-section active">
+          <div class="section-header">
+            <h2>Timeline Tuning</h2>
+            <span class="status-indicator <%= isActive ? 'active' : 'inactive' %>">
+              <%= isActive ? 'Active' : 'Inactive' %>
+            </span>
+          </div>
+
+          <div class="tuning-form">
+            <h3>What content do you want to see more of? Or less?</h3>
+            <p>Enter your content preferences for the timeline. Our AI will optimize your timeline to match these preferences using views, likes, follows, and feedback actions.</p>
+            
+            <form id="tuning-form">
+              <div class="form-group">
+                <label for="concept">Content Preferences:</label>
+                <input 
+                  type="text" 
+                  id="concept" 
+                  name="concept" 
+                  placeholder="E.g., More Machine Learning, NBA, Travel Photography, Less Crypto, Less Politics"
+                  value="<%= concept %>"
+                  required
+                >
+                <p class="preference-help">Use "More X" for content you want to see and "Less Y" for content you want to avoid.</p>
+              </div>
+              
+              <div class="tuning-actions">
+                <% if (!isActive) { %>
+                  <button type="submit" id="start-btn" class="btn btn-primary">Start Tuning</button>
+                <% } else { %>
+                  <button type="button" id="stop-btn" class="btn btn-danger">Stop Tuning</button>
+                <% } %>
+              </div>
+            </form>
+          </div>
+
+          <div class="tuning-info">
+            <h3>How it works</h3>
+            <div class="info-grid">
+              <div class="info-card">
+                <div class="info-icon">👁️</div>
+                <h4>Strategic Viewing</h4>
+                <p>Views relevant tweets for extended periods (Twitter's algorithm values 2+ minute engagements).</p>
+              </div>
+              <div class="info-card">
+                <div class="info-icon">❤️</div>
+                <h4>Likes</h4>
+                <p>Strategically likes tweets that match your interests to boost similar content (when enabled).</p>
+              </div>
+              <div class="info-card">
+                <div class="info-icon">👤</div>
+                <h4>Profile & Follow</h4>
+                <p>Visits profiles of relevant creators and selectively follows accounts in your interest areas.</p>
+              </div>
+              <div class="info-card">
+                <div class="info-icon">👎</div>
+                <h4>Negative Feedback</h4>
+                <p>Marks irrelevant content with "Not interested" to filter out unwanted topics from your feed.</p>
+              </div>
+            </div>
+            
+            <div class="tuning-engagement-notice">
+              <p><strong>Note:</strong> All engagement actions (views, likes, follows, and negative feedback) are tracked in the Activity Feed under Analytics. You can control which engagement types are used in Settings.</p>
+            </div>
+          </div>
+        </section>
+
+        <section id="analytics" class="dashboard-section">
+          <div class="section-header">
+            <h2>Analytics</h2>
+          </div>
+          <div id="analytics-container" class="analytics-container">
+            <% if (isActive) { %>
+              <div class="analytics-loading">
+                <p>Loading analytics data...</p>
+                <div class="spinner"></div>
+              </div>
+            <% } else { %>
+              <div class="analytics-placeholder">
+                <p>Analytics will appear here when your timeline tuning is active.</p>
+              </div>
+            <% } %>
+            
+            <div id="real-time-analytics" class="real-time-analytics" style="display: none;">
+              <div class="analytics-header">
+                <div class="stat-large">
+                  <span id="relevance-percentage">0</span>%
+                  <div class="stat-label">Current Relevance</div>
+                </div>
+                <div class="stat-large">
+                  <span id="elapsed-time">0</span> min
+                  <div class="stat-label">Elapsed Time</div>
+                </div>
+              </div>
+              
+              <div class="stats-grid">
+                <div class="stat-card">
+                  <div class="stat-value"><span id="total-analyzed">0</span></div>
+                  <div class="stat-label">Tweets Analyzed</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value"><span id="total-likes">0</span></div>
+                  <div class="stat-label">Tweets Liked</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value"><span id="total-dislikes">0</span></div>
+                  <div class="stat-label">Tweets Disliked</div>
+                </div>
+                <div class="stat-card">
+                  <div class="stat-value"><span id="cycles">0</span></div>
+                  <div class="stat-label">Cycles Completed</div>
+                </div>
+              </div>
+              
+              <div class="graph-container">
+                <h3>Relevance Progression</h3>
+                <div id="relevance-graph" class="relevance-graph">
+                  <!-- Graph will be rendered here with JavaScript -->
+                </div>
+              </div>
+              
+              <div class="engagement-metrics">
+                <h3>Engagement Metrics</h3>
+                <div class="metrics-grid">
+                  <div class="metric-item">
+                    <div class="metric-label">Deep Engagements</div>
+                    <div class="metric-value"><span id="high-value-viewings">0</span></div>
+                  </div>
+                  <div class="metric-item">
+                    <div class="metric-label">Profile Visits</div>
+                    <div class="metric-value"><span id="profile-visits">0</span></div>
+                  </div>
+                  <div class="metric-item">
+                    <div class="metric-label">Top User</div>
+                    <div class="metric-value"><span id="top-user">-</span></div>
+                  </div>
+                  <div class="metric-item">
+                    <div class="metric-label">Convergence Rate</div>
+                    <div class="metric-value"><span id="convergence-rate">0</span>%/cycle</div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="activity-feed-container">
+                <h3>Recent Engagement Activity</h3>
+                <div class="activity-counters">
+                  <div class="activity-counter">
+                    <span class="counter-number" id="view-count">0</span>
+                    <span class="counter-label">Total Activities</span>
+                  </div>
+                </div>
+                <div class="activity-types">
+                  <div class="activity-type-indicator view">
+                    <span class="activity-icon">👁️</span> Views <span class="type-count" id="view-type-count">0</span>
+                  </div>
+                  <div class="activity-type-indicator like">
+                    <span class="activity-icon">❤️</span> Likes <span class="type-count" id="like-type-count">0</span>
+                  </div>
+                  <div class="activity-type-indicator follow">
+                    <span class="activity-icon">👤</span> Follows <span class="type-count" id="follow-type-count">0</span>
+                  </div>
+                  <div class="activity-type-indicator dislike">
+                    <span class="activity-icon">👎</span> Not Interested <span class="type-count" id="dislike-type-count">0</span>
+                  </div>
+                  <div class="activity-type-indicator profile">
+                    <span class="activity-icon">🔍</span> Profile Visits <span class="type-count" id="profile-type-count">0</span>
+                  </div>
+                </div>
+                <div class="activity-feed" id="activity-feed">
+                  <div class="activity-empty-state">
+                    Waiting for activity data...
+                  </div>
+                  <!-- Activity items will be added here dynamically -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="settings" class="dashboard-section">
+          <div class="section-header">
+            <h2>Settings</h2>
+          </div>
+          <div class="settings-form">
+            <h3>Tuning Options</h3>
+            <div class="form-group">
+              <label>Auto-stop tuning after:</label>
+              <select id="auto-stop" class="form-control">
+                <option value="never">Never (manual stop only)</option>
+                <option value="1h">1 hour</option>
+                <option value="4h">4 hours</option>
+                <option value="12h">12 hours</option>
+                <option value="24h">24 hours</option>
+              </select>
+            </div>
+            
+            <div class="form-group">
+              <label>Tuning aggressiveness:</label>
+              <select id="tuning-aggression" class="form-control">
+                <option value="low">Low (view-only: no likes or follows)</option>
+                <option value="medium" selected>Medium (views + occasional likes, no follows)</option>
+                <option value="high">High (views + frequent likes + selective follows)</option>
+              </select>
+            </div>
+            
+            <h4 class="settings-subheading">Engagement Actions</h4>
+            <div class="engagement-controls">
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="enable-views" checked disabled>
+                  <span class="activity-icon view-icon">👁️</span>
+                  Enable View Actions <span class="required-badge">Required</span>
+                </label>
+                <p class="settings-help-text">Views are essential for training the algorithm. This cannot be disabled.</p>
+              </div>
+              
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="enable-likes" <%= typeof engagementSettings !== 'undefined' && engagementSettings.enableLikes ? 'checked' : '' %>>
+                  <span class="activity-icon like-icon">❤️</span>
+                  Enable Like Actions
+                </label>
+                <p class="settings-help-text">The tuner will like tweets that strongly match your interests.</p>
+              </div>
+              
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="enable-follows" <%= typeof engagementSettings !== 'undefined' && engagementSettings.enableFollows ? 'checked' : '' %>>
+                  <span class="activity-icon follow-icon">👤</span>
+                  Enable Follow Actions
+                </label>
+                <p class="settings-help-text">The tuner will follow accounts that consistently produce content matching your preferences.</p>
+              </div>
+              
+              <div class="form-group">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="enable-dislikes" <%= typeof engagementSettings !== 'undefined' && engagementSettings.enableDislikes ? 'checked' : '' %>>
+                  <span class="activity-icon dislike-icon">👎</span>
+                  Enable "Not Interested" Actions
+                </label>
+                <p class="settings-help-text">The tuner will mark content that doesn't match your preferences as "Not interested" to filter it out.</p>
+              </div>
+            </div>
+            
+            <div class="form-group">
+              <label class="checkbox-label">
+                <input type="checkbox" id="notifications" checked>
+                Receive email notifications about tuning progress
+              </label>
+            </div>
+            
+            <div class="settings-actions">
+              <button type="button" id="save-settings" class="btn btn-primary">Save Settings</button>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <footer>
+      <p>&copy; <%= new Date().getFullYear() %> Timeline Tuner. Not affiliated with Twitter/X.</p>
+    </footer>
+  </div>
+
+  <script>
+    // Toast notification functions
+    function showToast(message, type = 'info') {
+      const toastContainer = document.getElementById('toast-container');
+      const toast = document.createElement('div');
+      toast.className = `toast toast-${type}`;
+      
+      const messageSpan = document.createElement('span');
+      messageSpan.textContent = message;
+      
+      const closeButton = document.createElement('button');
+      closeButton.className = 'toast-close';
+      closeButton.innerHTML = '&times;';
+      closeButton.addEventListener('click', function() {
+        toastContainer.removeChild(toast);
+      });
+      
+      toast.appendChild(messageSpan);
+      toast.appendChild(closeButton);
+      toastContainer.appendChild(toast);
+      
+      // Auto remove after 3 seconds
+      setTimeout(() => {
+        if (toastContainer.contains(toast)) {
+          toastContainer.removeChild(toast);
+        }
+      }, 3000);
+    }
+    
+    document.addEventListener('DOMContentLoaded', function() {
+      // Navigation
+      const navLinks = document.querySelectorAll('.sidebar nav a');
+      const sections = document.querySelectorAll('.dashboard-section');
+      
+      navLinks.forEach(link => {
+        link.addEventListener('click', function(e) {
+          e.preventDefault();
+          const targetId = this.getAttribute('href').substring(1);
+          
+          // Update active nav link
+          document.querySelector('.sidebar nav li.active').classList.remove('active');
+          this.parentElement.classList.add('active');
+          
+          // Show target section, hide others
+          sections.forEach(section => {
+            if (section.id === targetId) {
+              section.classList.add('active');
+            } else {
+              section.classList.remove('active');
+            }
+          });
+        });
+      });
+      
+      // Tuning form submission
+      const tuningForm = document.getElementById('tuning-form');
+      if (tuningForm) {
+        tuningForm.addEventListener('submit', function(e) {
+          e.preventDefault();
+          const concept = document.getElementById('concept').value;
+          
+          // Show loading state
+          const startBtn = document.getElementById('start-btn');
+          const originalText = startBtn.textContent;
+          startBtn.textContent = 'Starting...';
+          startBtn.disabled = true;
+
+          // Get engagement settings
+          const enableLikes = document.getElementById('enable-likes')?.checked ?? true;
+          const enableFollows = document.getElementById('enable-follows')?.checked ?? true;
+          const enableDislikes = document.getElementById('enable-dislikes')?.checked ?? true;
+
+          fetch('/start-tuning', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              concept,
+              engagementSettings: {
+                enableLikes,
+                enableFollows,
+                enableDislikes: enableDislikes
+              }
+            }),
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              // Refresh the page to show the updated state
+              window.location.reload();
+            } else {
+              // Reset button state
+              startBtn.textContent = originalText;
+              startBtn.disabled = false;
+              
+              // Show error message as toast
+              showToast(data.message || 'An error occurred.', 'error');
+            }
+          })
+          .catch(error => {
+            // Reset button state
+            startBtn.textContent = originalText;
+            startBtn.disabled = false;
+            
+            console.error('Error:', error);
+            showToast('An error occurred while trying to start tuning.', 'error');
+          });
+        });
+      }
+      
+      // Stop tuning button
+      const stopBtn = document.getElementById('stop-btn');
+      if (stopBtn) {
+        stopBtn.addEventListener('click', function() {
+          // Show loading state
+          const originalText = stopBtn.textContent;
+          stopBtn.textContent = 'Stopping...';
+          stopBtn.disabled = true;
+          
+          fetch('/stop-tuning', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            }
+          })
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              // Refresh the page to show the updated state
+              window.location.reload();
+            } else {
+              // Reset button state
+              stopBtn.textContent = originalText;
+              stopBtn.disabled = false;
+              
+              showToast(data.message || 'An error occurred.', 'error');
+            }
+          })
+          .catch(error => {
+            // Reset button state
+            stopBtn.textContent = originalText;
+            stopBtn.disabled = false;
+            
+            console.error('Error:', error);
+            showToast('An error occurred while trying to stop tuning.', 'error');
+          });
+        });
+      }
+      
+      // Save settings button
+      const saveSettingsBtn = document.getElementById('save-settings');
+      if (saveSettingsBtn) {
+        saveSettingsBtn.addEventListener('click', function() {
+          // Show loading state
+          const originalText = saveSettingsBtn.textContent;
+          saveSettingsBtn.textContent = 'Saving...';
+          saveSettingsBtn.disabled = true;
+          
+          const autoStop = document.getElementById('auto-stop').value;
+          const tuningAggression = document.getElementById('tuning-aggression').value;
+          const enableLikes = document.getElementById('enable-likes').checked;
+          const enableFollows = document.getElementById('enable-follows').checked;
+          const enableDislikes = document.getElementById('enable-dislikes').checked;
+          const notifications = document.getElementById('notifications').checked;
+          
+          fetch('/save-settings', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ 
+              autoStop,
+              tuningAggression,
+              engagementSettings: {
+                enableLikes,
+                enableFollows,
+                enableDislikes: enableDislikes
+              },
+              notifications
+            }),
+          })
+          .then(response => response.json())
+          .then(data => {
+            // Reset button state
+            saveSettingsBtn.textContent = originalText;
+            saveSettingsBtn.disabled = false;
+            
+            if (data.success) {
+              // Show success feedback
+              const originalClassName = saveSettingsBtn.className;
+              saveSettingsBtn.className = 'btn btn-success';
+              saveSettingsBtn.textContent = 'Saved!';
+              
+              // Show success toast
+              showToast('Settings saved successfully!', 'success');
+              
+              // Reset after 2 seconds
+              setTimeout(() => {
+                saveSettingsBtn.className = originalClassName;
+                saveSettingsBtn.textContent = originalText;
+              }, 2000);
+            } else {
+              showToast(data.message || 'Failed to save settings.', 'error');
+            }
+          })
+          .catch(error => {
+            // Reset button state
+            saveSettingsBtn.textContent = originalText;
+            saveSettingsBtn.disabled = false;
+            
+            console.error('Error:', error);
+            showToast('An error occurred while saving settings.', 'error');
+          });
+        });
+      }
+      
+      // Connect engagement settings to active tuner
+      function updateActiveTunerSettings() {
+        const isActive = <%= isActive ? 'true' : 'false' %>;
+        if (!isActive) return; // Only if tuning is active
+        
+        const settingsToApply = {
+          enableLikes: document.getElementById('enable-likes').checked,
+          enableFollows: document.getElementById('enable-follows').checked,
+          enableDislikes: document.getElementById('enable-dislikes').checked
+        };
+        
+        fetch('/update-tuner-settings', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(settingsToApply),
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.success) {
+            showToast('Tuning settings updated', 'success');
+          } else {
+            showToast(data.message || 'Failed to update settings', 'error');
+          }
+        })
+        .catch(error => {
+          console.error('Error:', error);
+          showToast('Error updating tuner settings', 'error');
+        });
+      }
+      
+      // Add change listeners to settings checkboxes
+      const enableLikesCheckbox = document.getElementById('enable-likes');
+      const enableFollowsCheckbox = document.getElementById('enable-follows');
+      const enableDislikesCheckbox = document.getElementById('enable-dislikes');
+      
+      if (enableLikesCheckbox) enableLikesCheckbox.addEventListener('change', updateActiveTunerSettings);
+      if (enableFollowsCheckbox) enableFollowsCheckbox.addEventListener('change', updateActiveTunerSettings);
+      if (enableDislikesCheckbox) enableDislikesCheckbox.addEventListener('change', updateActiveTunerSettings);
+      
+      // Analytics data fetching and updating
+      const isActive = <%= isActive ? 'true' : 'false' %>;
+      if (isActive) {
+        fetchAnalyticsData();
+        // Set up interval to update analytics data every 30 seconds
+        setInterval(fetchAnalyticsData, 30000);
+      }
+      
+      // Function to fetch analytics data from the API
+      function fetchAnalyticsData() {
+        fetch('/api/analytics')
+          .then(response => response.json())
+          .then(data => {
+            if (data.success) {
+              updateAnalyticsDisplay(data.data);
+            } else {
+              console.error('Error fetching analytics:', data.message);
+            }
+          })
+          .catch(error => {
+            console.error('Error fetching analytics data:', error);
+          });
+      }
+      
+      // Function to update the analytics display
+      function updateAnalyticsDisplay(analytics) {
+        // Show the analytics container and hide the loading indicator
+        document.querySelector('.analytics-loading')?.style.setProperty('display', 'none');
+        document.getElementById('real-time-analytics').style.display = 'block';
+        
+        // Update primary stats
+        document.getElementById('relevance-percentage').textContent = analytics.relevancePercentage.toFixed(1);
+        document.getElementById('elapsed-time').textContent = analytics.elapsedMinutes;
+        document.getElementById('total-analyzed').textContent = analytics.totalTweetsAnalyzed;
+        document.getElementById('total-likes').textContent = analytics.totalLiked;
+        document.getElementById('total-dislikes').textContent = analytics.totalDisliked;
+        document.getElementById('cycles').textContent = analytics.cycles;
+        
+        // Update additional metrics
+        document.getElementById('high-value-viewings').textContent = analytics.highValueViewings;
+        document.getElementById('profile-visits').textContent = analytics.profileVisits;
+        document.getElementById('convergence-rate').textContent = analytics.convergenceRate.toFixed(2);
+        
+        // Update top user if available
+        if (analytics.topUsers && analytics.topUsers.length > 0) {
+          document.getElementById('top-user').textContent = '@' + analytics.topUsers[0].username;
+        }
+        
+        // Render the graph if enough data points
+        if (analytics.relevanceHistory && analytics.relevanceHistory.length > 1) {
+          renderRelevanceGraph(analytics.relevanceHistory);
+        }
+        
+        // Update activity feed if available
+        if (analytics.recentActivities && analytics.recentActivities.length > 0) {
+          updateActivityFeed(analytics.recentActivities);
+        }
+      }
+      
+      // Function to update the activity feed
+      function updateActivityFeed(activities) {
+        const activityFeed = document.getElementById('activity-feed');
+        
+        // Clear empty state if present
+        const emptyState = activityFeed.querySelector('.activity-empty-state');
+        if (emptyState) {
+          activityFeed.removeChild(emptyState);
+        }
+        
+        // Add new activities at the top
+        activities.forEach(activity => {
+          // Check if this activity already exists in the feed
+          const existingItem = document.getElementById(`activity-${activity.id}`);
+          if (existingItem) {
+            return; // Skip if already in feed
+          }
+          
+          // Create new activity item
+          const activityItem = document.createElement('div');
+          activityItem.id = `activity-${activity.id}`;
+          // Add high-value class for views over 100 seconds
+          const isHighValue = activity.type === 'view' && activity.duration > 100;
+          activityItem.className = `activity-item ${activity.type}${isHighValue ? ' high-value' : ''}`;
+          
+          // Determine icon based on activity type
+          let icon = '👁️';
+          if (activity.type === 'like') icon = '❤️';
+          else if (activity.type === 'follow') icon = '👤';
+          else if (activity.type === 'dislike') icon = '👎';
+          else if (activity.type === 'profile') icon = '🔍';
+          
+          // Format timestamp
+          const timestamp = new Date(activity.timestamp);
+          const timeString = timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+          
+          // Create activity content
+          activityItem.innerHTML = `
+            <div class="activity-icon">${icon}</div>
+            <div class="activity-content">
+              <div class="activity-message">${formatActivityMessage(activity)}</div>
+              <div class="activity-time">${timeString}</div>
+            </div>
+          `;
+          
+          // Add to the top of the feed
+          if (activityFeed.firstChild) {
+            activityFeed.insertBefore(activityItem, activityFeed.firstChild);
+          } else {
+            activityFeed.appendChild(activityItem);
+          }
+          
+          // Limit the number of items in the feed (keep the 20 most recent)
+          const items = activityFeed.querySelectorAll('.activity-item');
+          if (items.length > 20) {
+            for (let i = 20; i < items.length; i++) {
+              activityFeed.removeChild(items[i]);
+            }
+          }
+        });
+      }
+      
+      // Format the activity message based on the activity type
+      function formatActivityMessage(activity) {
+        switch (activity.type) {
+          case 'view':
+            return `${activity.duration > 100 ? '✨ High-value view' : 'Viewed tweet'} • <b>@${activity.username}</b> ${activity.duration ? `• ${activity.duration}s` : ''}`;
+          case 'like':
+            return `✓ Liked tweet • <b>@${activity.username}</b>${activity.content ? ` • "${truncateText(activity.content, 40)}"` : ''}`;
+          case 'follow':
+            return `🔄 Followed user • <b>@${activity.username}</b>`;
+          case 'dislike':
+            return `✗ Not interested • <b>@${activity.username}</b>`;
+          case 'profile':
+            return `👤 Visited profile • <b>@${activity.username}</b>`;
+          default:
+            return `Interacted with <b>@${activity.username}</b>`;
+        }
+      }
+      
+      // Helper to truncate text
+      function truncateText(text, maxLength) {
+        if (!text) return '';
+        return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+      }
+      
+      // Function to render the relevance graph
+      function renderRelevanceGraph(history) {
+        const graphContainer = document.getElementById('relevance-graph');
+        
+        // Clear previous content
+        graphContainer.innerHTML = '';
+        
+        // Determine dimensions
+        const width = graphContainer.clientWidth - 20; // Account for padding
+        const height = graphContainer.clientHeight - 20;
+        
+        // If not enough history points, show a message
+        if (history.length < 2) {
+          const message = document.createElement('div');
+          message.textContent = 'Not enough data points to display graph';
+          message.style.textAlign = 'center';
+          message.style.paddingTop = '80px';
+          message.style.color = '#333333';
+          message.style.fontFamily = "'Lato', sans-serif";
+          graphContainer.appendChild(message);
+          return;
+        }
+        
+        // Find min/max percentages for scaling
+        let minPercentage = 100;
+        let maxPercentage = 0;
+        
+        history.forEach(point => {
+          minPercentage = Math.min(minPercentage, point.percentage);
+          maxPercentage = Math.max(maxPercentage, point.percentage);
+        });
+        
+        // Add some padding to range
+        minPercentage = Math.max(0, minPercentage - 5);
+        maxPercentage = Math.min(100, maxPercentage + 5);
+        
+        // Ensure we have a reasonable range
+        if (maxPercentage - minPercentage < 10) {
+          minPercentage = Math.max(0, maxPercentage - 10);
+        }
+        
+        // Calculate scaling factors
+        const range = maxPercentage - minPercentage;
+        const xStep = width / (history.length - 1);
+        
+        // Create SVG for graph
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('width', width);
+        svg.setAttribute('height', height);
+        svg.style.display = 'block';
+        graphContainer.appendChild(svg);
+        
+        // Create polyline for graph
+        const polyline = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+        polyline.setAttribute('fill', 'none');
+        polyline.setAttribute('stroke', '#3FA9F5');
+        polyline.setAttribute('stroke-width', '2');
+        
+        // Generate points
+        const points = history.map((point, index) => {
+          const x = index * xStep;
+          const y = height - ((point.percentage - minPercentage) / range) * height;
+          return `${x},${y}`;
+        }).join(' ');
+        
+        polyline.setAttribute('points', points);
+        svg.appendChild(polyline);
+        
+        // Add circles at data points
+        history.forEach((point, index) => {
+          const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+          const x = index * xStep;
+          const y = height - ((point.percentage - minPercentage) / range) * height;
+          
+          circle.setAttribute('cx', x);
+          circle.setAttribute('cy', y);
+          circle.setAttribute('r', '3');
+          circle.setAttribute('fill', '#3FA9F5');
+          
+          svg.appendChild(circle);
+        });
+        
+        // Add x-axis
+        const xAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        xAxis.setAttribute('x1', '0');
+        xAxis.setAttribute('y1', height);
+        xAxis.setAttribute('x2', width);
+        xAxis.setAttribute('y2', height);
+        xAxis.setAttribute('stroke', '#e1e8ed');
+        xAxis.setAttribute('stroke-width', '1');
+        svg.appendChild(xAxis);
+        
+        // Add y-axis
+        const yAxis = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        yAxis.setAttribute('x1', '0');
+        yAxis.setAttribute('y1', '0');
+        yAxis.setAttribute('x2', '0');
+        yAxis.setAttribute('y2', height);
+        yAxis.setAttribute('stroke', '#e1e8ed');
+        yAxis.setAttribute('stroke-width', '1');
+        svg.appendChild(yAxis);
+      }
+    });
+  </script>
+
+  <!-- Activity counter script -->
+  <script>
+    // Wait for document to be fully loaded
+    document.addEventListener('DOMContentLoaded', function() {
+      // Hook into the existing analytics update cycle
+      const originalUpdateActivityFeed = updateActivityFeed;
+      
+      // Override with our enhanced version
+      updateActivityFeed = function(activities) {
+        // First call the original function
+        originalUpdateActivityFeed(activities);
+        
+        // Then update our counters
+        updateActivityCounters(activities);
+      };
+      
+      // Function to update activity counters
+      function updateActivityCounters(activities) {
+        // Count activities by type
+        const activityCounts = {
+          view: 0,
+          like: 0,
+          follow: 0,
+          dislike: 0,
+          profile: 0,
+          total: activities.length
+        };
+        
+        // Count each type
+        activities.forEach(activity => {
+          if (activityCounts.hasOwnProperty(activity.type)) {
+            activityCounts[activity.type]++;
+          }
+        });
+        
+        // Update the total counter
+        document.getElementById('view-count').textContent = activityCounts.total;
+        
+        // Update type counters
+        document.getElementById('view-type-count').textContent = activityCounts.view;
+        document.getElementById('like-type-count').textContent = activityCounts.like;
+        document.getElementById('follow-type-count').textContent = activityCounts.follow;
+        document.getElementById('dislike-type-count').textContent = activityCounts.dislike;
+        document.getElementById('profile-type-count').textContent = activityCounts.profile;
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Twitter Timeline Tuner</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo">
+        <div class="logo-image">T</div>
+        <h1>Timeline Tuner</h1>
+      </div>
+      <div class="nav">
+        <% if (isLoggedIn) { %>
+          <a href="/dashboard" class="btn btn-primary">Dashboard</a>
+          <a href="/logout" class="btn btn-outline">Logout</a>
+        <% } else { %>
+          <a href="/login" class="btn btn-primary">Login with Twitter</a>
+        <% } %>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div class="hero-content">
+          <h2>Tune Your Twitter Feed to Your Interests Instantly</h2>
+          <p>Leverage AI insights to shape your Twitter 'For You' timeline. See exactly what you love—like bridges, technology, sports, and more.</p>
+          <% if (!isLoggedIn) { %>
+            <a href="/login" class="btn btn-accent btn-large">Start Customizing Your Timeline</a>
+          <% } else { %>
+            <a href="/dashboard" class="btn btn-accent btn-large">Start Customizing Your Timeline</a>
+          <% } %>
+        </div>
+        <div class="hero-image">
+          <img src="/images/homepageshow.png" alt="Twitter Timeline">
+        </div>
+      </section>
+
+      <section class="features">
+        <h2>How It Works</h2>
+        <div class="feature-grid">
+          <div class="feature-card">
+            <div class="feature-icon">🔐</div>
+            <h3>Connect Your Twitter Account</h3>
+            <p>Securely authorize access with a seamless OAuth login.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">⚙️</div>
+            <h3>Set Your Preferences</h3>
+            <p>Specify exact interests (e.g., "Show me tweets about bridges").</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🤖</div>
+            <h3>Agent Optimization</h3>
+            <p>Our AI agent uses insights from Twitter's recommendation system to curate your timeline.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">✨</div>
+            <h3>Enjoy Your Curated Feed</h3>
+            <p>Experience a timeline tailored precisely to your interests.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="algorithm-section">
+        <h2>Understanding Twitter's Algorithm</h2>
+        <div class="algorithm-container">
+          <div class="algorithm-card">
+            <div class="algorithm-icon">🔍</div>
+            <h3>Candidate Generation</h3>
+            <p>GraphJet, SimClusters, and RealGraph work together to find potential content for your feed.</p>
+          </div>
+          <div class="algorithm-card">
+            <div class="algorithm-icon">⚖️</div>
+            <h3>Ranking Process</h3>
+            <p>Content flows from Light Ranker to Heavy Ranker (MaskNet) to determine what shows in your feed.</p>
+          </div>
+          <div class="algorithm-card">
+            <div class="algorithm-icon">📊</div>
+            <h3>Scoring Weights</h3>
+            <p>Reply engagement, negative feedback, conversation engagement, and verified author boosts all impact what you see.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="features">
+        <h2>Key Features</h2>
+        <div class="feature-grid">
+          <div class="feature-card">
+            <div class="feature-icon">📈</div>
+            <h3>Algorithm Analyzer</h3>
+            <p>An interactive dashboard visually depicting how the algorithm scores tweets.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">🎛️</div>
+            <h3>Customizable Preferences</h3>
+            <p>Easily adjust and refine interests at any time.</p>
+          </div>
+          <div class="feature-card">
+            <div class="feature-icon">📱</div>
+            <h3>Engagement Metrics</h3>
+            <p>Visual feedback showing how timeline changes impact your feed engagement and quality.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="faq-section">
+        <h2>Frequently Asked Questions</h2>
+        <div class="faq-grid">
+          <div class="faq-item">
+            <h3>How secure is my data?</h3>
+            <p>Your data is protected with Trusted Execution Environment (TEEs). We never store your passwords and only keep necessary tokens in a secure environment.</p>
+          </div>
+          <div class="faq-item">
+            <h3>How quickly will I see changes?</h3>
+            <p>Most users start seeing noticeable changes to their timeline within 6-12 hours of running the tuner. Run it during your sleep!</p>
+          </div>
+          <div class="faq-item">
+            <h3>Can I use multiple interest topics?</h3>
+            <p>Yes! You can create separate tuning sessions for different interests or combine them into a single optimization profile.</p>
+          </div>
+          <div class="faq-item">
+            <h3>What if the changes aren't what I want?</h3>
+            <p>You can adjust your preferences at any time from the dashboard.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="cta-section">
+        <h2>Ready to Transform Your Twitter Experience?</h2>
+        <p>Get started today and enjoy a feed that shows you content you actually care about.</p>
+        <% if (!isLoggedIn) { %>
+          <a href="/login" class="btn cta-btn">Get Started Free</a>
+        <% } else { %>
+          <a href="/dashboard" class="btn cta-btn">Go to Dashboard</a>
+        <% } %>
+      </section>
+    </main>
+
+    <footer>
+      <p>&copy; <%= new Date().getFullYear() %> Timeline Tuner. Not affiliated with Twitter/X.</p>
+    </footer>
+  </div>
+</body>
+</html>

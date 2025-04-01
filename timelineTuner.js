@@ -9,7 +9,7 @@ const HYPERBOLIC_API_KEY = process.env.HYPERBOLIC_API_KEY;
 const HYPERBOLIC_API_URL = 'https://api.hyperbolic.xyz/v1/chat/completions';
 
 // Analytics object to track convergence
-const analytics = {
+export const analytics = {
   startTime: Date.now(),
   cycles: 0,
   searches: 0,
@@ -372,21 +372,86 @@ const analytics = {
     }
     
     return null;
+  },
+
+  // Function to get current analytics as an object for display
+  getAnalyticsData() {
+    return {
+      elapsedMinutes: this.getElapsedMinutes(),
+      cycles: this.cycles,
+      searches: this.searches,
+      totalTweetsAnalyzed: this.totalTweetsAnalyzed,
+      totalRelevantTweets: this.totalRelevantTweets,
+      totalIrrelevantTweets: this.totalIrrelevantTweets,
+      totalLiked: this.totalLiked,
+      totalDisliked: this.totalDisliked,
+      searchLikes: this.searchLikes,
+      timelineLikes: this.timelineLikes,
+      highValueViewings: this.highValueViewings,
+      profileVisits: this.profileVisits,
+      profileEngagements: this.profileEngagements,
+      relevancePercentage: this.getCurrentRelevancePercentage(),
+      movingAverage: this.getMovingAverage(),
+      convergenceRate: this.getConvergenceRate(),
+      relevanceHistory: this.relevanceHistory,
+      topUsers: this.relevantUserCounts ? 
+        Object.entries(this.relevantUserCounts)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([username, count]) => ({ username, count })) : 
+        []
+    };
+  },
+
+  // Reset analytics for a new tuning session
+  reset() {
+    this.startTime = Date.now();
+    this.cycles = 0;
+    this.searches = 0;
+    this.totalTweetsAnalyzed = 0;
+    this.totalRelevantTweets = 0;
+    this.totalIrrelevantTweets = 0;
+    this.totalLiked = 0;
+    this.totalDisliked = 0;
+    this.searchLikes = 0;
+    this.searchTweetsAnalyzed = 0;
+    this.timelineLikes = 0;
+    this.timelineTweetsAnalyzed = 0;
+    this.totalTimeSpentViewing = 0;
+    this.highValueViewings = 0;
+    this.profileVisits = 0;
+    this.profileEngagements = 0;
+    this.dontLikeAttempts = 0;
+    this.dontLikeSuccesses = 0;
+    this.notRelevantAttempts = 0;
+    this.notRelevantSuccesses = 0;
+    this.relevanceHistory = [];
+    this.followedUsers = null;
+    this.totalFollowed = 0;
+    this.relevantUserCounts = null;
   }
 };
 
 // LLM-based function to check if text is related to a concept using Hyperbolic API
-async function isRelatedToConcept(text, concept) {
+export async function isRelatedToConcept(text, concepts) {
   // Fallback to simple keyword matching if text is too short or API key is missing
   if (!text || !HYPERBOLIC_API_KEY) {
     return false;
   }
   
+  // Convert single concept string to an array for unified processing
+  const conceptArray = Array.isArray(concepts) ? concepts : [concepts];
+  const conceptText = conceptArray.join(', ');
+  
   try {
-    // Prepare the message for the LLM
+    // Prepare the message for the LLM with enhanced preference parsing
     const promptText = `
-    Determine if the following tweet text adheres to my preference of what content/tweet I wanna see: "${concept}". 
-    Consider both explicit mentions and implicit references.
+    Determine if the following tweet text adheres to my preferences of what content I want to see.
+    
+    My preferences: "${conceptText}"
+    
+    Note: My preferences may include both what I want to see MORE of and what I want to see LESS of.
+    For example, if I said "More Machine Learning, Less Crypto", then show me Machine Learning content and avoid Crypto content.
     
     Text: "${text.replace(/"/g, '\\"')}"
     
@@ -423,7 +488,7 @@ async function isRelatedToConcept(text, concept) {
     const data = await response.json();
     const answer = data.choices?.[0]?.message?.content.trim().toLowerCase() || '';
     
-    console.log(`LLM judgment for concept "${concept}": ${answer}`);
+    console.log(`LLM judgment for concepts "${conceptText}": ${answer}`);
     return answer.includes('yes');
     
   } catch (error) {
@@ -434,10 +499,10 @@ async function isRelatedToConcept(text, concept) {
 }
 
 // Helper function to delay execution
-const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+export const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
 // New function to stay on tweet to signal interest (high weight in Twitter algorithm)
-async function stayOnTweet(scraper, tweetId, seconds) {
+export async function stayOnTweet(scraper, tweetId, seconds, tunerInstance = null) {
   try {
     // Log the start of viewing activity
     console.log(`🕰️ Starting to view tweet ${tweetId} for ${seconds} seconds`);
@@ -447,7 +512,8 @@ async function stayOnTweet(scraper, tweetId, seconds) {
     
     // For API-based approach, we simulate staying on a tweet
     // Fetch the tweet to ensure it's loaded and cached
-    await scraper.getTweet(tweetId);
+    const tweetData = await scraper.getTweet(tweetId);
+    const username = tweetData?.user?.screen_name || tweetData?.core?.user_results?.result?.legacy?.screen_name || 'unknown';
     
     // Wait for the specified duration 
     await sleep(seconds * 1000);
@@ -459,9 +525,14 @@ async function stayOnTweet(scraper, tweetId, seconds) {
     // Twitter's algorithm specifically values staying for 2+ minutes
     if (seconds >= 120) {
       analytics.highValueViewings++;
-      console.log(`✓ Completed high-value view of tweet (${seconds} seconds)`);
+      console.log(`✓ Completed high-value view of tweet by @${username} (${seconds} seconds)`);
     } else {
-      console.log(`✓ Viewed tweet for ${seconds} seconds`);
+      console.log(`✓ Viewed tweet by @${username} for ${seconds} seconds`);
+    }
+    
+    // Track activity if tuner instance is provided
+    if (tunerInstance && typeof tunerInstance.trackViewActivity === 'function') {
+      tunerInstance.trackViewActivity(username, tweetId, seconds);
     }
     
     return true;
@@ -472,7 +543,7 @@ async function stayOnTweet(scraper, tweetId, seconds) {
 }
 
 // New function to visit user profiles and engage with their content
-async function visitProfileAndEngage(scraper, username, concept) {
+export async function visitProfileAndEngage(scraper, username, concept, tunerInstance = null) {
   const engagementSummary = {
     profileVisited: false,
     tweetsLiked: 0,
@@ -483,6 +554,11 @@ async function visitProfileAndEngage(scraper, username, concept) {
   try {
     console.log(`\n👤 Visiting profile for user: @${username}`);
     analytics.profileVisits++;
+    
+    // Track profile visit activity if tuner instance is provided
+    if (tunerInstance && typeof tunerInstance.trackProfileActivity === 'function') {
+      tunerInstance.trackProfileActivity(username);
+    }
     
     // Get user's recent tweets using the API
     const userId = await scraper.getUserIdByScreenName(username);
@@ -537,23 +613,37 @@ async function visitProfileAndEngage(scraper, username, concept) {
       for (let i = 0; i < engageCount; i++) {
         const { tweetId, text } = conceptTweets[i];
         
-        // Like the tweet if not already liked
-        try {
-          await scraper.likeTweet(tweetId);
-          engagementSummary.tweetsLiked++;
-          engagementSummary.conceptTweetsEngaged++;
-          console.log(`✓ Liked tweet from profile: ${text.substring(0, 50)}...`);
-          
-          // For the first tweet, spend extra time viewing it
-          if (i === 0) {
-            await stayOnTweet(scraper, tweetId, 60);
-          }
-          
-          analytics.profileEngagements++;
-          await sleep(2000); // Space out engagements
-        } catch (error) {
-          console.error(`Error liking tweet ${tweetId}: ${error.message}`);
+        // Check if likes are enabled from settings
+        const likesEnabled = tunerInstance?.enableLikes !== false;
+        
+        // View the tweet regardless
+        if (i === 0) {
+          await stayOnTweet(scraper, tweetId, 60);
         }
+        
+        // Like the tweet if likes are enabled and not already liked
+        if (likesEnabled) {
+          try {
+            await scraper.likeTweet(tweetId);
+            engagementSummary.tweetsLiked++;
+            engagementSummary.conceptTweetsEngaged++;
+            console.log(`✓ Liked tweet from profile: ${text.substring(0, 50)}...`);
+            analytics.profileEngagements++;
+            
+            // Track like activity if tuner instance is provided
+            if (tunerInstance && typeof tunerInstance.trackLikeActivity === 'function') {
+              tunerInstance.trackLikeActivity(username, tweetId, text.substring(0, 100));
+            }
+          } catch (error) {
+            console.error(`Error liking tweet ${tweetId}: ${error.message}`);
+          }
+        } else {
+          console.log(`ℹ️ Viewed but did not like tweet from profile (likes disabled in settings)`);
+          // Still count engagement (view-only)
+          engagementSummary.conceptTweetsEngaged++;
+        }
+        
+        await sleep(2000); // Space out engagements
       }
     } 
     // If no concept tweets found but we want to strengthen connection to this author
@@ -590,7 +680,7 @@ async function visitProfileAndEngage(scraper, username, concept) {
 }
 
 // Helper function to find feedback action by type and extract metadata
-function findFeedbackAction(tweetWithFeedback, feedbackType) {
+export function findFeedbackAction(tweetWithFeedback, feedbackType) {
   // Check if there are feedback actions available
   if (!tweetWithFeedback.feedbackActions) return null;
   
@@ -612,17 +702,17 @@ function findFeedbackAction(tweetWithFeedback, feedbackType) {
 }
 
 // Helper function to find "DontLike" feedback action and extract metadata
-function findDontLikeAction(tweetWithFeedback) {
+export function findDontLikeAction(tweetWithFeedback) {
   return findFeedbackAction(tweetWithFeedback, 'DontLike');
 }
 
 // Helper function to find "NotRelevant" feedback action and extract metadata
-function findNotRelevantAction(tweetWithFeedback) {
+export function findNotRelevantAction(tweetWithFeedback) {
   return findFeedbackAction(tweetWithFeedback, 'NotRelevant');
 }
 
 // Helper function to extract action_metadata from a feedbackUrl
-function extractActionMetadata(feedbackUrl) {
+export function extractActionMetadata(feedbackUrl) {
   if (!feedbackUrl) return null;
   
   try {
@@ -635,7 +725,7 @@ function extractActionMetadata(feedbackUrl) {
 }
 
 // Helper function to send feedback with action metadata
-async function sendFeedback(scraper, tweetId, feedbackAction, actionDescription) {
+export async function sendFeedback(scraper, tweetId, feedbackAction, actionDescription) {
   if (!feedbackAction) return false;
   
   // Extract action_metadata from the feedbackUrl
@@ -689,20 +779,48 @@ async function sendFeedback(scraper, tweetId, feedbackAction, actionDescription)
 }
 
 // Function to search for tweets related to the concept and like them
-async function searchAndLikeRelevantTweets(scraper, concept, processedTweets, maxTweets = 30) {
-  console.log(`\n📡 Searching for tweets related to "${concept}"...`);
+export async function searchAndLikeRelevantTweets(scraper, concept, processedTweets, maxTweets = 30, tunerInstance = null) {
+  const conceptDisplay = Array.isArray(concept) ? concept.join(', ') : concept;
+  console.log(`\n📡 Searching for tweets related to "${conceptDisplay}"...`);
   analytics.searches++;
   
   try {
-    // Create multiple search queries to diversify results
-    const hashtagVersion = concept.replace(/\s+/g, '');
-    const searchQueries = [
-      { query: `${concept}`, label: "exact concept" },
-      { query: `#${hashtagVersion}`, label: "hashtag" },
-      { query: `${concept} filter:links`, label: "with links" },
-      { query: `${concept} -filter:replies`, label: "excluding replies" },
-      { query: `${concept} min_faves:5`, label: "min likes 5" }
-    ];
+    // Create search queries based on preference type
+    let searchQueries = [];
+    
+    // Handle array of preferences or single concept
+    if (Array.isArray(concept)) {
+      // Extract "more" preferences for searching (we'll filter the results later)
+      const positivePreferences = concept.filter(pref => 
+        !pref.toLowerCase().startsWith('less') && 
+        !pref.toLowerCase().startsWith('no')
+      ).map(pref => pref.replace(/^more\s+/i, '').trim());
+      
+      // Generate search queries for each positive preference
+      for (const pref of positivePreferences) {
+        const hashtagVersion = pref.replace(/\s+/g, '');
+        searchQueries.push(
+          { query: `${pref}`, label: `exact: ${pref}` },
+          { query: `#${hashtagVersion}`, label: `hashtag: ${pref}` },
+          { query: `${pref} filter:links`, label: `${pref} with links` },
+          { query: `${pref} min_faves:10`, label: `popular ${pref}` }
+        );
+      }
+    } else {
+      // Traditional single concept behavior
+      const hashtagVersion = concept.replace(/\s+/g, '');
+      searchQueries = [
+        { query: `${concept}`, label: "exact concept" },
+        { query: `#${hashtagVersion}`, label: "hashtag" },
+        { query: `${concept} filter:links`, label: "with links" },
+        { query: `${concept} filter:images`, label: "with images" },
+        { query: `${concept} filter:videos`, label: "with videos" },
+        { query: `${concept} -filter:replies`, label: "excluding replies" },
+        { query: `${concept} min_faves:10`, label: "popular tweets" },
+        { query: `${concept} lang:en`, label: "English only" },
+        { query: `${concept} is:verified`, label: "verified accounts" }
+      ];
+    }
     
     let totalLikedCount = 0;
     let totalAnalyzedCount = 0;
@@ -713,11 +831,11 @@ async function searchAndLikeRelevantTweets(scraper, concept, processedTweets, ma
       
       console.log(`\n🔍 Searching for "${searchItem.label}": ${searchItem.query}`);
       
-      // Get search results
+      // Get search results - use Top ranking for better content
       const searchResultsPage = await scraper.fetchSearchTweets(
         searchItem.query, 
         Math.min(20, maxTweets - totalLikedCount), 
-        SearchMode.Latest
+        SearchMode.Top
       );
       
       if (!searchResultsPage || !searchResultsPage.tweets || searchResultsPage.tweets.length === 0) {
@@ -764,25 +882,40 @@ async function searchAndLikeRelevantTweets(scraper, concept, processedTweets, ma
         
         if (isRelevant) {
           try {
-            // Like the tweet
-            await scraper.likeTweet(tweetId);
-            console.log(`✓ Liked search result tweet (relevant to concept)`);
-            likedCount++;
-            totalLikedCount++;
-            analytics.searchLikes++;
-            analytics.totalLiked++;
             analytics.totalRelevantTweets++;
+            
+            // Check if likes are enabled from settings
+            const likesEnabled = tunerInstance?.enableLikes !== false;
+            const followsEnabled = tunerInstance?.enableFollows !== false;
+            
+            let isLiked = false;
+            
+            // Like tweets if enabled in settings
+            if (likesEnabled) {
+              await scraper.likeTweet(tweetId);
+              console.log(`✓ Liked search result tweet (relevant to preferences)`);
+              likedCount++;
+              totalLikedCount++;
+              analytics.searchLikes++;
+              analytics.totalLiked++;
+              isLiked = true;
+            } else {
+              console.log(`ℹ️ Found relevant tweet but did not like (likes disabled in settings)`);
+            }
             
             // For every 3rd relevant tweet, spend significant time viewing it (120+ seconds)
             // This is important for the algorithm
             if (likedCount % 3 === 0) {
-              await stayOnTweet(scraper, tweetId, 120);
+              await stayOnTweet(scraper, tweetId, 120, tunerInstance);
+            } else {
+              // Always view tweets we find relevant, even if shorter duration
+              await stayOnTweet(scraper, tweetId, 40, tunerInstance);
             }
             
             // Record that we've processed this tweet
             processedTweets.set(tweetId, {
               processed: true,
-              liked: true,
+              liked: isLiked,
               dontLiked: false,
               notRelevant: false,
               fromSearch: true
@@ -791,12 +924,28 @@ async function searchAndLikeRelevantTweets(scraper, concept, processedTweets, ma
             // Track the user who posted relevant content
             analytics.relevantUserCounts[username] = (analytics.relevantUserCounts[username] || 0) + 1;
             
-            // For users who consistently post good content, visit their profile occasionally
-            if (analytics.relevantUserCounts[username] >= 2 && Math.random() < 0.3) {
-              await visitProfileAndEngage(scraper, username, concept);
-            } else {
-              // Consider following users with relevant content
-              await considerFollowingUser(scraper, username);
+            // Give higher priority to users who consistently post good content
+            const relevanceScore = analytics.relevantUserCounts[username];
+            
+            // Prioritize engaging with frequent relevant posters
+            if (relevanceScore >= 3) {
+              // Highly relevant user - always visit their profile
+              console.log(`🌟 High-value user @${username} found (${relevanceScore} relevant posts)`);
+              await visitProfileAndEngage(scraper, username, concept, tunerInstance);
+              
+              // Always consider following high-value users if follows are enabled
+              if (followsEnabled) {
+                await considerFollowingUser(scraper, username, tunerInstance);
+              }
+            } else if (relevanceScore >= 2 && Math.random() < 0.6) {
+              // Medium-value user - visit profile with higher probability
+              await visitProfileAndEngage(scraper, username, concept, tunerInstance);
+            } else if (relevanceScore === 1 && Math.random() < 0.2) {
+              // New user with relevant content - visit occasionally
+              await visitProfileAndEngage(scraper, username, concept, tunerInstance);
+            } else if (followsEnabled) {
+              // Consider following users with any relevant content if follows are enabled
+              await considerFollowingUser(scraper, username, tunerInstance);
             }
             
             // Add a short pause between likes to avoid rate limiting
@@ -832,8 +981,29 @@ async function searchAndLikeRelevantTweets(scraper, concept, processedTweets, ma
 }
 
 // New function to consider following users who post relevant content
-async function considerFollowingUser(scraper, username) {
+export async function considerFollowingUser(scraper, username, tunerInstance = null) {
   if (!analytics.relevantUserCounts || !username) return;
+  
+  // Check follows settings
+  let followsEnabled = true;
+  
+  // First try to get settings from passed tunerInstance
+  if (tunerInstance) {
+    followsEnabled = tunerInstance.enableFollows !== false;
+  }
+  // Fall back to global tuner if available
+  else {
+    const globalTuner = global.tuner;
+    if (globalTuner) {
+      followsEnabled = globalTuner.enableFollows !== false;
+    }
+  }
+  
+  // If follows are disabled in settings, don't follow
+  if (!followsEnabled) {
+    console.log(`ℹ️ Not following @${username} (follows disabled in settings)`);
+    return false;
+  }
   
   // If we're not tracking followed users yet, initialize
   if (!analytics.followedUsers) {
@@ -853,6 +1023,11 @@ async function considerFollowingUser(scraper, username) {
       if (!analytics.totalFollowed) analytics.totalFollowed = 0;
       analytics.totalFollowed++;
       
+      // Track follow activity if tuner instance is provided
+      if (tunerInstance && typeof tunerInstance.trackFollowActivity === 'function') {
+        tunerInstance.trackFollowActivity(username);
+      }
+      
       return true;
     } catch (error) {
       console.error(`Error following user ${username}:`, error.message);
@@ -862,9 +1037,31 @@ async function considerFollowingUser(scraper, username) {
 }
 
 // New function to provide more aggressive feedback
-async function provideAggressiveFeedback(scraper, tweetWithFeedback, tweetId, concept) {
+export async function provideAggressiveFeedback(scraper, tweetWithFeedback, tweetId, concept, tunerInstance = null) {
   const tweet = tweetWithFeedback.tweet;
   const tweetText = tweet.legacy?.full_text || '';
+  const username = tweet.core?.user_results?.result?.legacy?.screen_name || tweet.user?.screen_name || 'unknown';
+  
+  // Check dislikes settings
+  let dislikesEnabled = true;
+  
+  // First try to get settings from passed tunerInstance
+  if (tunerInstance) {
+    dislikesEnabled = tunerInstance.enableDislikes !== false;
+  }
+  // Fall back to global tuner if available
+  else {
+    const globalTuner = global.tuner;
+    if (globalTuner) {
+      dislikesEnabled = globalTuner.enableDislikes !== false;
+    }
+  }
+  
+  // If dislikes are disabled in settings, don't provide negative feedback
+  if (!dislikesEnabled) {
+    console.log(`ℹ️ Not providing negative feedback (dislikes disabled in settings)`);
+    return false;
+  }
   
   // First apply standard feedback actions
   const dontLikeAction = findDontLikeAction(tweetWithFeedback);
@@ -884,6 +1081,11 @@ async function provideAggressiveFeedback(scraper, tweetWithFeedback, tweetId, co
       
       console.log('✗ Marked as "Not interested" using specific action metadata');
       feedbackSuccess = true;
+      
+      // Track dislike activity if tuner instance is provided
+      if (tunerInstance && typeof tunerInstance.trackDislikeActivity === 'function') {
+        tunerInstance.trackDislikeActivity(username, tweetId);
+      }
     }
   }
   
@@ -909,7 +1111,7 @@ async function provideAggressiveFeedback(scraper, tweetWithFeedback, tweetId, co
 }
 
 // New function to optimize memory usage and tracking
-function optimizeMemoryUsage(processedTweets, maxSize = 1000) {
+export function optimizeMemoryUsage(processedTweets, maxSize = 1000) {
   if (processedTweets.size <= maxSize) return;
   
   // Keep only the most recent tweets
@@ -922,73 +1124,183 @@ function optimizeMemoryUsage(processedTweets, maxSize = 1000) {
   console.log(`🧹 Memory optimized: Reduced processed tweets from ${tweets.length} to ${processedTweets.size}`);
 }
 
-async function main() {
-  const scraper = new Scraper();
-
-  // only show tweets that contain the concept
-  const concept = "Turkish Ice Cream";
-  
-  // Set rate limits
-  const REFRESH_DELAY = 30000; // 30 seconds between timeline refreshes
-  const INTERACTION_DELAY = 2000; // 2 seconds between likes/dislikes
-  const SEARCH_INTERVAL = 3; // How many home timeline refreshes before doing a search again 
-  const MAX_SEARCH_TWEETS = 40; // Maximum number of search results to process
-  const ANALYTICS_INTERVAL = 1; // How often to print analytics (every N cycles)
-  const TIMELINE_FETCH_COUNT = 100; // Number of tweets to fetch from timeline
-  const ADAPTIVE_TIMING = true; // Whether to use adaptive timing based on performance
-  const PROFILE_VISIT_INTERVAL = 5; // How often to visit profiles (every N cycles)
-  
-  // Check if Hyperbolic API key is available
-  if (!HYPERBOLIC_API_KEY) {
-    console.warn('⚠️ HYPERBOLIC_API_KEY not found in environment variables. Using fallback keyword matching.');
-  } else {
-    console.log('✓ Using Hyperbolic API for LLM-based relevance judgment');
+// Class to manage the Twitter timeline tuning process
+export class TimelineTuner {
+  constructor() {
+    this.scraper = null;
+    this.concept = null;
+    this.isRunning = false;
+    this.intervalId = null;
+    this.processedTweets = new Map();
+    this.cycleCount = 0;
+    this.refreshDelay = 30000; // 30 seconds between timeline refreshes
+    
+    // Configuration
+    this.INTERACTION_DELAY = 2000; // 2 seconds between likes/dislikes
+    this.SEARCH_INTERVAL = 3; // How many home timeline refreshes before doing a search again 
+    this.MAX_SEARCH_TWEETS = 40; // Maximum number of search results to process
+    this.ANALYTICS_INTERVAL = 1; // How often to print analytics (every N cycles)
+    this.TIMELINE_FETCH_COUNT = 100; // Number of tweets to fetch from timeline
+    this.ADAPTIVE_TIMING = true; // Whether to use adaptive timing based on performance
+    this.PROFILE_VISIT_INTERVAL = 5; // How often to visit profiles (every N cycles)
+    
+    // Engagement action toggles (controlled by settings)
+    this.enableLikes = true;     // Whether to like relevant content
+    this.enableFollows = true;   // Whether to follow users with relevant content
+    this.enableDislikes = true;  // Whether to provide negative feedback
+    
+    // Activity tracking
+    this.recentActivities = [];
+    this.activityCounter = 1;
+    this.MAX_ACTIVITIES = 30;   // Maximum number of activities to store
+    
+    // Event handlers
+    this.onStatusChanged = null;
+    this.onAnalyticsUpdated = null;
+    this.onError = null;
   }
-  
-  // Keep track of processed tweets and their status
-  const processedTweets = new Map(); // Map<tweetId, {processed: boolean, liked: boolean, dontLiked: boolean}>
 
-  // v1 login
-  await scraper.login(
-    process.env.TWITTER_USERNAME,
-    process.env.TWITTER_PASSWORD,
-    process.env.TWITTER_EMAIL,
-  );
-  
-  console.log('Logged in successfully! Starting timeline monitoring...');
-  
-  // Counter for search intervals
-  let cycleCount = 0;
-  let currentRefreshDelay = REFRESH_DELAY;
-  
-  // Initial search to bootstrap the process
-  await searchAndLikeRelevantTweets(scraper, concept, processedTweets, MAX_SEARCH_TWEETS);
-  
-  // Continuous monitoring loop
-  while (true) {
-      cycleCount++;
-      analytics.cycles++;
-      
-      // Periodically search for and like tweets related to the concept (more frequent)
-      if (cycleCount % SEARCH_INTERVAL === 0) {
-        await searchAndLikeRelevantTweets(scraper, concept, processedTweets, MAX_SEARCH_TWEETS);
+  // Login to Twitter
+  async login(username, password, email) {
+    try {
+      this.scraper = new Scraper();
+      await this.scraper.login(username, password, email);
+      return true;
+    } catch (error) {
+      console.error('Login failed:', error);
+      this.handleError(error);
+      return false;
+    }
+  }
+
+  // Start the tuning process
+  async start(concept) {
+    if (!this.scraper) {
+      const error = new Error('Not logged in. Please login first.');
+      this.handleError(error);
+      return false;
+    }
+
+    if (this.isRunning) {
+      this.stop();
+    }
+
+    try {
+      // Convert concept string to structured preferences if needed
+      // This allows handling both simple concepts and more/less preferences
+      if (typeof concept === 'string') {
+        // Check if concept contains multiple preferences (using commas)
+        if (concept.includes(',')) {
+          this.concept = concept.split(',').map(pref => pref.trim());
+        } else {
+          this.concept = concept;
+        }
+      } else {
+        this.concept = concept;
       }
       
-      // Periodically visit profiles of relevant users for deeper engagement
-      if (cycleCount % PROFILE_VISIT_INTERVAL === 0 && analytics.relevantUserCounts) {
+      console.log(`Starting tuning with preferences: ${Array.isArray(this.concept) ? this.concept.join(', ') : this.concept}`);
+      
+      this.isRunning = true;
+      this.processedTweets = new Map();
+      this.cycleCount = 0;
+      this.refreshDelay = 30000;
+      
+      // Reset analytics
+      analytics.reset();
+      
+      if (this.onStatusChanged) {
+        this.onStatusChanged(true, this.concept);
+      }
+      
+      // Initial search to bootstrap the process
+      await searchAndLikeRelevantTweets(this.scraper, this.concept, this.processedTweets, this.MAX_SEARCH_TWEETS, this);
+      
+      // Start continuous monitoring
+      this.runTuning();
+      
+      return true;
+    } catch (error) {
+      console.error('Error starting tuning:', error);
+      this.handleError(error);
+      this.stop();
+      return false;
+    }
+  }
+
+  // Stop the tuning process
+  stop() {
+    if (this.intervalId) {
+      clearTimeout(this.intervalId);
+      this.intervalId = null;
+    }
+    
+    this.isRunning = false;
+    
+    if (this.onStatusChanged) {
+      this.onStatusChanged(false, this.concept);
+    }
+    
+    return true;
+  }
+
+  // Run a single tuning cycle
+  async runCycle() {
+    try {
+      this.cycleCount++;
+      analytics.cycles++;
+      
+      // As convergence improves, adjust search frequency
+      let searchThisCycle = false;
+      
+      // Calculate current relevance percentage
+      const currentRelevance = analytics.getCurrentRelevancePercentage();
+      
+      // Dynamic search interval based on current relevance
+      // Search more frequently when relevance is low, less frequently when high
+      if (currentRelevance < 30) {
+        // Low relevance: search every cycle
+        searchThisCycle = true;
+      } else if (currentRelevance < 60) {
+        // Medium relevance: search every other cycle
+        searchThisCycle = this.cycleCount % 2 === 0;
+      } else {
+        // High relevance: use standard interval
+        searchThisCycle = this.cycleCount % this.SEARCH_INTERVAL === 0;
+      }
+      
+      // Search for relevant tweets based on dynamic frequency
+      if (searchThisCycle) {
+        console.log(`\n🔍 Running search at relevance level ${currentRelevance.toFixed(1)}%`);
+        await searchAndLikeRelevantTweets(this.scraper, this.concept, this.processedTweets, this.MAX_SEARCH_TWEETS, this);
+      }
+      
+      // Profile visit strategy based on convergence
+      if (analytics.relevantUserCounts && Object.keys(analytics.relevantUserCounts).length > 0) {
+        // Get top users by relevance count
         const topUsers = Object.entries(analytics.relevantUserCounts)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 3);
+          .sort((a, b) => b[1] - a[1]);
           
+        // Always visit the most relevant user every cycle
         if (topUsers.length > 0) {
-          const randomUser = topUsers[Math.floor(Math.random() * topUsers.length)];
-          console.log(`\n🔄 Selected user @${randomUser[0]} for profile visit (${randomUser[1]} relevant tweets)`);
-          await visitProfileAndEngage(scraper, randomUser[0], concept);
+          const topUser = topUsers[0];
+          console.log(`\n🔝 Visiting top relevant user @${topUser[0]} (${topUser[1]} relevant tweets)`);
+          await visitProfileAndEngage(this.scraper, topUser[0], this.concept, this);
+        }
+        
+        // Periodically visit other relevant users
+        if (this.cycleCount % this.PROFILE_VISIT_INTERVAL === 0 && topUsers.length > 1) {
+          // Get a random user from ranks 2-5
+          const secondaryUsers = topUsers.slice(1, Math.min(5, topUsers.length));
+          const randomUser = secondaryUsers[Math.floor(Math.random() * secondaryUsers.length)];
+          
+          console.log(`\n🔄 Selected secondary user @${randomUser[0]} for profile visit (${randomUser[1]} relevant tweets)`);
+          await visitProfileAndEngage(this.scraper, randomUser[0], this.concept, this);
         }
       }
       
       // Fetch more tweets from the home timeline
-      const homeTimelineWithFeedback = await scraper.fetchHomeTimeline(TIMELINE_FETCH_COUNT, []);
+      const homeTimelineWithFeedback = await this.scraper.fetchHomeTimeline(this.TIMELINE_FETCH_COUNT, []);
       console.log(`\nFetched ${homeTimelineWithFeedback.length} tweets from home timeline`);
       
       let processedCount = 0;
@@ -1011,9 +1323,7 @@ async function main() {
         const username = user?.legacy?.screen_name || 'unknown';
         
         // Check if we've already processed this tweet
-        if (processedTweets.has(tweetId)) {
-          const tweetStatus = processedTweets.get(tweetId);
-          
+        if (this.processedTweets.has(tweetId)) {
           continue; // Skip already processed tweets
         }
         
@@ -1026,7 +1336,7 @@ async function main() {
         console.log(`Content: ${tweetText.slice(0, 100)}${tweetText.length > 100 ? '...' : ''}`);
         
         // Analyze tweet content with LLM - more aggressive relevance detection
-        let isRelevant = await isRelatedToConcept(tweetText, concept);
+        let isRelevant = await isRelatedToConcept(tweetText, this.concept);
         
         // Track the user if this is relevant content
         if (isRelevant && username) {
@@ -1036,7 +1346,7 @@ async function main() {
           analytics.relevantUserCounts[username] = (analytics.relevantUserCounts[username] || 0) + 1;
         }
         
-        console.log(`Related to ${concept}: ${isRelevant ? 'Yes' : 'No'}`);
+        console.log(`Related to ${this.concept}: ${isRelevant ? 'Yes' : 'No'}`);
         
         // Update analytics based on relevance
         if (isRelevant) {
@@ -1056,46 +1366,77 @@ async function main() {
         };
 
         if (isRelevant) {
-          // For relevant tweets: Like them and spend significant time viewing
-          await scraper.likeTweet(tweetId);
-          console.log('✓ Liked tweet (relevant to concept)');
-          tweetStatus.liked = true;
-          processedCount++;
-          analytics.timelineLikes++;
-          analytics.totalLiked++;
-          
+          // For relevant tweets: Apply engagement actions based on settings
+
+          // Always view relevant content (viewing is always enabled)
           // For highly relevant content, spend extra time (high weight in algorithm)
           if (Math.random() < 0.3) {
-            await stayOnTweet(scraper, tweetId, 120); // 2 minutes (high algorithmic weight)
+            await stayOnTweet(this.scraper, tweetId, 120, this); // 2 minutes (high algorithmic weight)
           } else {
-            await stayOnTweet(scraper, tweetId, 45); // 45 seconds
+            await stayOnTweet(this.scraper, tweetId, 45, this); // 45 seconds
           }
           
-          // Consider following the user
-          await considerFollowingUser(scraper, username);
+          // Like tweets if enabled in settings
+          if (this.enableLikes) {
+            await this.scraper.likeTweet(tweetId);
+            console.log('✓ Liked tweet (relevant to content preferences)');
+            tweetStatus.liked = true;
+            analytics.timelineLikes++;
+            analytics.totalLiked++;
+            
+            // Track like activity
+            this.trackLikeActivity(username, tweetId, tweetText.substring(0, 100));
+          } else {
+            console.log('ℹ️ Viewed but did not like tweet (likes disabled in settings)');
+          }
           
-          // Occasionally visit the profile (high algorithmic weight)
-          if (Math.random() < 0.15) {
-            await visitProfileAndEngage(scraper, username, concept);
+          processedCount++;
+          
+          // Track user relevance score
+          const relevanceScore = analytics.relevantUserCounts[username] || 1;
+          
+          // Follow user if enabled in settings
+          if (this.enableFollows) {
+            await considerFollowingUser(this.scraper, username, this);
+          }
+          
+          // Profile visit strategy based on user value
+          if (relevanceScore >= 3) {
+            // High-value user - always visit profile
+            console.log(`🌟 High-value timeline user @${username} found (${relevanceScore} relevant posts)`);
+            await visitProfileAndEngage(this.scraper, username, this.concept, this);
+          } else if (relevanceScore >= 2 && Math.random() < 0.5) {
+            // Medium-value user - visit with higher probability
+            await visitProfileAndEngage(this.scraper, username, this.concept, this);
+          } else if (relevanceScore === 1 && Math.random() < 0.25) {
+            // New relevant user - visit occasionally
+            await visitProfileAndEngage(this.scraper, username, this.concept, this);
           }
         } else {
-          // For irrelevant tweets: Apply more aggressive feedback
-          const feedbackSuccess = await provideAggressiveFeedback(scraper, tweetWithFeedback, tweetId, concept);
-          
-          if (feedbackSuccess) {
-            processedCount++;
+          // For irrelevant tweets: Apply negative feedback if enabled
+          if (this.enableDislikes) {
+            const feedbackSuccess = await provideAggressiveFeedback(this.scraper, tweetWithFeedback, tweetId, this.concept, this);
+            
+            if (feedbackSuccess) {
+              processedCount++;
+              console.log('✓ Applied negative feedback (not matching preferences)');
+            } else {
+              console.log('⚠ Skipping tweet - no usable feedback actions available');
+              skippedCount++;
+              continue;
+            }
           } else {
-            console.log('⚠ Skipping tweet - no usable feedback actions available');
-            skippedCount++;
-            continue;
+            // Just log but don't apply feedback if disabled
+            console.log('ℹ️ Skipping irrelevant tweet (negative feedback disabled in settings)');
+            processedCount++;
           }
         }
         
         // Add to processed map
-        processedTweets.set(tweetId, tweetStatus);
+        this.processedTweets.set(tweetId, tweetStatus);
         
         // Rate limit between interactions
-        await sleep(INTERACTION_DELAY);
+        await sleep(this.INTERACTION_DELAY);
       }
       
       // Add relevance data point for this cycle
@@ -1104,27 +1445,167 @@ async function main() {
       console.log(`\nProcessing summary: ${processedCount} processed, ${skippedCount} skipped`);
       
       // Optimize memory usage more frequently
-      optimizeMemoryUsage(processedTweets, 1500);
+      optimizeMemoryUsage(this.processedTweets, 1500);
       
       // Print analytics at regular intervals
-      if (cycleCount % ANALYTICS_INTERVAL === 0) {
+      if (this.cycleCount % this.ANALYTICS_INTERVAL === 0) {
         analytics.printAnalytics();
         analytics.printPerformanceInsights();
-      }
-      
-      // Adjust refresh delay if adaptive timing is enabled
-      if (ADAPTIVE_TIMING && cycleCount > 5) {
-        const optimalTiming = analytics.analyzeOptimalTimings();
-        if (optimalTiming) {
-          currentRefreshDelay = optimalTiming;
-          console.log(`\n⚙️ Adjusting refresh delay to ${currentRefreshDelay/1000} seconds based on performance`);
+        
+        if (this.onAnalyticsUpdated) {
+          this.onAnalyticsUpdated(analytics.getAnalyticsData());
         }
       }
       
-      console.log(`\nWaiting ${currentRefreshDelay/1000} seconds before next refresh...`);
-      console.log(`Cycle ${cycleCount % SEARCH_INTERVAL}/${SEARCH_INTERVAL} until next search`);
-      await sleep(currentRefreshDelay);
+      // Adjust refresh delay if adaptive timing is enabled
+      if (this.ADAPTIVE_TIMING && this.cycleCount > 5) {
+        const optimalTiming = analytics.analyzeOptimalTimings();
+        if (optimalTiming) {
+          this.refreshDelay = optimalTiming;
+          console.log(`\n⚙️ Adjusting refresh delay to ${this.refreshDelay/1000} seconds based on performance`);
+        }
+      }
+      
+      console.log(`\nWaiting ${this.refreshDelay/1000} seconds before next refresh...`);
+      console.log(`Cycle ${this.cycleCount % this.SEARCH_INTERVAL}/${this.SEARCH_INTERVAL} until next search`);
+      
+      return true;
+    } catch (error) {
+      console.error('Error in tuning cycle:', error);
+      this.handleError(error);
+      return false;
+    }
+  }
+
+  // Run continuous tuning cycle
+  async runTuning() {
+    if (!this.isRunning) return;
+    
+    try {
+      await this.runCycle();
+      
+      // Schedule next cycle if still running
+      if (this.isRunning) {
+        this.intervalId = setTimeout(() => this.runTuning(), this.refreshDelay);
+      }
+    } catch (error) {
+      console.error('Error in continuous tuning:', error);
+      this.handleError(error);
+      this.stop();
+    }
+  }
+
+  // Get current analytics data
+  getAnalytics() {
+    return analytics.getAnalyticsData();
+  }
+  
+  // Get recent activities
+  getRecentActivities() {
+    return this.recentActivities;
+  }
+  
+  // Track a view activity
+  trackViewActivity(username, tweetId, duration) {
+    const activity = {
+      id: this.activityCounter++,
+      type: 'view',
+      username,
+      tweetId,
+      duration,
+      timestamp: new Date().toISOString()
+    };
+    
+    this.addActivity(activity);
+    return activity;
+  }
+  
+  // Track a like activity
+  trackLikeActivity(username, tweetId, content = '') {
+    const activity = {
+      id: this.activityCounter++,
+      type: 'like',
+      username,
+      tweetId,
+      content,
+      timestamp: new Date().toISOString()
+    };
+    
+    this.addActivity(activity);
+    return activity;
+  }
+  
+  // Track a follow activity
+  trackFollowActivity(username) {
+    const activity = {
+      id: this.activityCounter++,
+      type: 'follow',
+      username,
+      timestamp: new Date().toISOString()
+    };
+    
+    this.addActivity(activity);
+    return activity;
+  }
+  
+  // Track a dislike activity
+  trackDislikeActivity(username, tweetId) {
+    const activity = {
+      id: this.activityCounter++,
+      type: 'dislike',
+      username,
+      tweetId,
+      timestamp: new Date().toISOString()
+    };
+    
+    this.addActivity(activity);
+    return activity;
+  }
+  
+  // Track a profile visit activity
+  trackProfileActivity(username) {
+    const activity = {
+      id: this.activityCounter++,
+      type: 'profile',
+      username,
+      timestamp: new Date().toISOString()
+    };
+    
+    this.addActivity(activity);
+    return activity;
+  }
+  
+  // Add activity to the list and maintain max size
+  addActivity(activity) {
+    // Add to the beginning (most recent first)
+    this.recentActivities.unshift(activity);
+    
+    // Keep list size under the maximum
+    if (this.recentActivities.length > this.MAX_ACTIVITIES) {
+      this.recentActivities.pop();
+    }
+    
+    return activity;
+  }
+
+  // Handle errors
+  handleError(error) {
+    if (this.onError) {
+      this.onError(error);
+    }
+  }
+
+  // Check if tuning is active
+  isActive() {
+    return this.isRunning;
+  }
+
+  // Get current concept
+  getConcept() {
+    return this.concept;
   }
 }
 
-main().catch(console.error);
+// Create and export a default TimelineTuner instance
+export const tuner = new TimelineTuner();
+export default tuner;

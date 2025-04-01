@@ -1,383 +1,93 @@
-# agent-twitter-client
+# Twitter Timeline Tuner
 
-This is a modified version of [@the-convocation/twitter-scraper](https://github.com/the-convocation/twitter-scraper) with added functionality for sending tweets and retweets. This package does not require the Twitter API to use and will run in both the browser and server.
+A powerful tool for optimizing your Twitter timeline algorithm using advanced engagement strategies.
+
+## Overview
+
+Twitter Timeline Tuner is a sophisticated tool designed to help users train their Twitter timeline algorithm to show more content related to their interests. Unlike simple approaches that only like tweets or use "show less often" feedback, this tool implements a comprehensive strategy that leverages Twitter's full algorithmic signals:
+
+- **High-value engagement metrics**: Simulates staying on tweets for 2+ minutes, which Twitter's algorithm weights heavily
+- **Profile visits and engagement**: Systematically visits profiles of relevant content creators and engages with multiple posts
+- **Strategic content discovery**: Uses search and keyword analysis to find and engage with relevant content
+- **Intelligent feedback**: Provides targeted negative feedback for irrelevant content
+
+## Features
+
+- **Web interface**: Easy-to-use dashboard for managing your timeline tuning
+- **Concept-based tuning**: Specify what topics or concepts you want to see more of
+- **Advanced analytics**: Track the convergence of your timeline with detailed metrics
+- **OAuth integration**: Simple one-click login with Twitter (no need to copy cookies manually)
+- **Alternative cookie-based authentication**: Option to use your browser cookies as an alternative method
+- **Privacy-focused**: Authentication data is only stored in your browser session, not on any server
 
 ## Installation
 
-```sh
-npm install agent-twitter-client
+1. Clone this repository:
+```bash
+git clone https://github.com/your-username/twitter-timeline-tuner.git
+cd twitter-timeline-tuner
 ```
 
-## Setup
-
-Configure environment variables for authentication.
-
-```
-TWITTER_USERNAME=    # Account username
-TWITTER_PASSWORD=    # Account password
-TWITTER_EMAIL=       # Account email
-PROXY_URL=           # HTTP(s) proxy for requests (necessary for browsers)
-
-# Twitter API v2 credentials for tweet and poll functionality
-TWITTER_API_KEY=               # Twitter API Key
-TWITTER_API_SECRET_KEY=        # Twitter API Secret Key
-TWITTER_ACCESS_TOKEN=          # Access Token for Twitter API v2
-TWITTER_ACCESS_TOKEN_SECRET=   # Access Token Secret for Twitter API v2
+2. Install dependencies:
+```bash
+npm install
 ```
 
-### Getting Twitter Cookies
-
-It is important to use Twitter cookies to avoid sending a new login request to Twitter every time you want to perform an action.
-
-In your application, you will likely want to check for existing cookies. If cookies are not available, log in with user authentication credentials and cache the cookies for future use.
-
-```ts
-const scraper = await getScraper({ authMethod: 'password' });
-
-scraper.getCookies().then((cookies) => {
-  console.log(cookies);
-  // Remove 'Cookies' and save the cookies as a JSON array
-});
+3. Create a `.env` file with the following content:
+```
+PORT=3000
+SESSION_SECRET=your-session-secret
+HYPERBOLIC_API_KEY=your-api-key-if-available
+TWITTER_CONSUMER_KEY=your-twitter-api-key
+TWITTER_CONSUMER_SECRET=your-twitter-api-secret
+CALLBACK_URL=http://localhost:3000/auth/twitter/callback
 ```
 
-## Getting Started
+> To enable OAuth login, you need to:
+> - Create a Twitter Developer account at https://developer.twitter.com
+> - Create a new project and app
+> - Set up the OAuth 1.0a settings and get your consumer key and secret
+> - Add the callback URL to your app's settings in the Twitter Developer Portal
 
-```ts
-const scraper = new Scraper();
-await scraper.login('username', 'password');
-
-// If using v2 functionality (currently required to support polls)
-await scraper.login(
-  'username',
-  'password',
-  'email',
-  'appKey',
-  'appSecret',
-  'accessToken',
-  'accessSecret',
-);
-
-const tweets = await scraper.getTweets('elonmusk', 10);
-const tweetsAndReplies = scraper.getTweetsAndReplies('elonmusk');
-const latestTweet = await scraper.getLatestTweet('elonmusk');
-const tweet = await scraper.getTweet('1234567890123456789');
-await scraper.sendTweet('Hello world!');
-
-// Create a poll
-await scraper.sendTweetV2(
-  `What's got you most hyped? Let us know! 🤖💸`,
-  undefined,
-  {
-    poll: {
-      options: [
-        { label: 'AI Innovations 🤖' },
-        { label: 'Crypto Craze 💸' },
-        { label: 'Both! 🌌' },
-        { label: 'Neither for Me 😅' },
-      ],
-      durationMinutes: 120, // Duration of the poll in minutes
-    },
-  },
-);
+4. Start the server:
+```bash
+npm start
 ```
 
-### Fetching Specific Tweet Data (V2)
+## Usage
 
-```ts
-// Fetch a single tweet with poll details
-const tweet = await scraper.getTweetV2('1856441982811529619', {
-  expansions: ['attachments.poll_ids'],
-  pollFields: ['options', 'end_datetime'],
-});
-console.log('tweet', tweet);
+1. Open `http://localhost:3000` in your browser
+2. Choose one of the login methods:
+   - **OAuth Login (Recommended)**: Click "Log in with Twitter" for a seamless one-click authentication
+   - **Alternative Method**: Follow the instructions to manually extract and paste your Twitter cookies
+3. Enter the concept you want to see more of in your timeline
+4. Start the tuning process
+5. Monitor progress in the analytics section
 
-// Fetch multiple tweets with poll and media details
-const tweets = await scraper.getTweetsV2(
-  ['1856441982811529619', '1856429655215260130'],
-  {
-    expansions: ['attachments.poll_ids', 'attachments.media_keys'],
-    pollFields: ['options', 'end_datetime'],
-    mediaFields: ['url', 'preview_image_url'],
-  },
-);
-console.log('tweets', tweets);
-```
+## How It Works
 
-## API
+The Timeline Tuner uses a multi-pronged approach to optimize your Twitter algorithm:
 
-### Authentication
+### Strategic Viewing
+The Twitter algorithm assigns high weight (11 points) to tweets that users spend significant time on, especially those viewed for 2+ minutes. Our tuner simulates this deep engagement with relevant content.
 
-```ts
-// Log in
-await scraper.login('username', 'password');
+### Profile Visits
+Visiting a creator's profile and engaging with multiple posts sends a strong signal (12 points) to the algorithm that you value this creator's content.
 
-// Log out
-await scraper.logout();
+### Content Discovery
+The tuner actively searches for content matching your interests, performing targeted engagement to strengthen the algorithm's understanding of your preferences.
 
-// Check if logged in
-const isLoggedIn = await scraper.isLoggedIn();
+### Negative Feedback
+For irrelevant content, the tuner applies the most effective forms of negative feedback, further refining the algorithm.
 
-// Get current session cookies
-const cookies = await scraper.getCookies();
+## Contributing
 
-// Set current session cookies
-await scraper.setCookies(cookies);
+Contributions are welcome! Please feel free to submit a Pull Request.
 
-// Clear current cookies
-await scraper.clearCookies();
-```
+## License
 
-### Profile
+This project is licensed under the MIT License - see the LICENSE file for details.
 
-```ts
-// Get a user's profile
-const profile = await scraper.getProfile('TwitterDev');
+## Disclaimer
 
-// Get a user ID from their screen name
-const userId = await scraper.getUserIdByScreenName('TwitterDev');
-
-// Get logged-in user's profile
-const me = await scraper.me();
-```
-
-### Search
-
-```ts
-import { SearchMode } from 'agent-twitter-client';
-
-// Search for recent tweets
-const tweets = scraper.searchTweets('#nodejs', 20, SearchMode.Latest);
-
-// Search for profiles
-const profiles = scraper.searchProfiles('John', 10);
-
-// Fetch a page of tweet results
-const results = await scraper.fetchSearchTweets('#nodejs', 20, SearchMode.Top);
-
-// Fetch a page of profile results
-const profileResults = await scraper.fetchSearchProfiles('John', 10);
-```
-
-### Relationships
-
-```ts
-// Get a user's followers
-const followers = scraper.getFollowers('12345', 100);
-
-// Get who a user is following
-const following = scraper.getFollowing('12345', 100);
-
-// Fetch a page of a user's followers
-const followerResults = await scraper.fetchProfileFollowers('12345', 100);
-
-// Fetch a page of who a user is following
-const followingResults = await scraper.fetchProfileFollowing('12345', 100);
-
-// Follow a user
-const followUserResults = await scraper.followUser('elonmusk');
-```
-
-### Trends
-
-```ts
-// Get current trends
-const trends = await scraper.getTrends();
-
-// Fetch tweets from a list
-const listTweets = await scraper.fetchListTweets('1234567890', 50);
-```
-
-### Tweets
-
-```ts
-// Get a user's tweets
-const tweets = scraper.getTweets('TwitterDev');
-
-// Fetch the home timeline
-const homeTimeline = await scraper.fetchHomeTimeline(10, ['seenTweetId1','seenTweetId2']);
-
-// Using the updated fetchHomeTimeline with feedback actions
-const homeTimelineWithFeedback = await scraper.fetchHomeTimeline(20, []);
-for (const tweetWithFeedback of homeTimelineWithFeedback) {
-  // Access the tweet data
-  console.log(`Tweet ID: ${tweetWithFeedback.tweet.rest_id}`);
-  
-  // Access the feedback actions (like "don't like" action)
-  if (tweetWithFeedback.feedbackActions?.dontlike) {
-    const dontLikeAction = tweetWithFeedback.feedbackActions.dontlike;
-    console.log(`Don't Like Action Metadata: ${dontLikeAction.actionMetadata}`);
-    
-    // Use the specific action metadata for this tweet when marking it as "don't like"
-    await scraper.unlikeTweet(tweetWithFeedback.tweet.rest_id, dontLikeAction.actionMetadata);
-  }
-}
-
-// Get a user's liked tweets
-const likedTweets = scraper.getLikedTweets('TwitterDev');
-
-// Get a user's tweets and replies
-const tweetsAndReplies = scraper.getTweetsAndReplies('TwitterDev');
-
-// Get tweets matching specific criteria
-const timeline = scraper.getTweets('TwitterDev', 100);
-const retweets = await scraper.getTweetsWhere(
-  timeline,
-  (tweet) => tweet.isRetweet,
-);
-
-// Get a user's latest tweet
-const latestTweet = await scraper.getLatestTweet('TwitterDev');
-
-// Get a specific tweet by ID
-const tweet = await scraper.getTweet('1234567890123456789');
-
-// Send a tweet
-const sendTweetResults = await scraper.sendTweet('Hello world!');
-
-// Send a quote tweet - Media files are optional
-const sendQuoteTweetResults = await scraper.sendQuoteTweet(
-  'Hello world!',
-  '1234567890123456789',
-  ['mediaFile1', 'mediaFile2'],
-);
-
-// Retweet a tweet
-const retweetResults = await scraper.retweet('1234567890123456789');
-
-// Like a tweet
-const likeTweetResults = await scraper.likeTweet('1234567890123456789');
-```
-
-## Sending Tweets with Media
-
-### Media Handling
-
-The scraper requires media files to be processed into a specific format before sending:
-
-- Media must be converted to Buffer format
-- Each media file needs its MIME type specified
-- This helps the scraper distinguish between image and video processing models
-
-### Basic Tweet with Media
-
-```ts
-// Example: Sending a tweet with media attachments
-const mediaData = [
-  {
-    data: fs.readFileSync('path/to/image.jpg'),
-    mediaType: 'image/jpeg',
-  },
-  {
-    data: fs.readFileSync('path/to/video.mp4'),
-    mediaType: 'video/mp4',
-  },
-];
-
-await scraper.sendTweet('Hello world!', undefined, mediaData);
-```
-
-### Supported Media Types
-
-```ts
-// Image formats and their MIME types
-const imageTypes = {
-  '.jpg': 'image/jpeg',
-  '.jpeg': 'image/jpeg',
-  '.png': 'image/png',
-  '.gif': 'image/gif',
-};
-
-// Video format
-const videoTypes = {
-  '.mp4': 'video/mp4',
-};
-```
-
-### Media Upload Limitations
-
-- Maximum 4 images per tweet
-- Only 1 video per tweet
-- Maximum video file size: 512MB
-- Supported image formats: JPG, PNG, GIF
-- Supported video format: MP4
-
-## Grok Integration
-
-This client provides programmatic access to Grok through Twitter's interface, offering a unique capability that even Grok's official API cannot match - access to real-time Twitter data. While Grok has a standalone API, only by interacting with Grok through Twitter can you leverage its ability to analyze and respond to live Twitter content. This makes it the only way to programmatically access an LLM with direct insight into Twitter's real-time information. [@grokkyAi](https://x.com/grokkyAi)
-
-### Basic Usage
-
-```ts
-const scraper = new Scraper();
-await scraper.login('username', 'password');
-
-// Start a new conversation
-const response = await scraper.grokChat({
-  messages: [{ role: 'user', content: 'What are your thoughts on AI?' }],
-});
-
-console.log(response.message); // Grok's response
-console.log(response.messages); // Full conversation history
-```
-
-If no `conversationId` is provided, the client will automatically create a new conversation.
-
-### Handling Rate Limits
-
-Grok has rate limits of 25 messages every 2 hours for non-premium accounts. The client provides rate limit information in the response:
-
-```ts
-const response = await scraper.grokChat({
-  messages: [{ role: 'user', content: 'Hello!' }],
-});
-
-if (response.rateLimit?.isRateLimited) {
-  console.log(response.rateLimit.message);
-  console.log(response.rateLimit.upsellInfo); // Premium upgrade information
-}
-```
-
-### Response Types
-
-The Grok integration includes TypeScript types for better development experience:
-
-```ts
-interface GrokChatOptions {
-  messages: GrokMessage[];
-  conversationId?: string;
-  returnSearchResults?: boolean;
-  returnCitations?: boolean;
-}
-
-interface GrokChatResponse {
-  conversationId: string;
-  message: string;
-  messages: GrokMessage[];
-  webResults?: any[];
-  metadata?: any;
-  rateLimit?: GrokRateLimit;
-}
-```
-
-### Advanced Usage
-
-```ts
-const response = await scraper.grokChat({
-  messages: [{ role: 'user', content: 'Research quantum computing' }],
-  returnSearchResults: true, // Include web search results
-  returnCitations: true, // Include citations for information
-});
-
-// Access web results if available
-if (response.webResults) {
-  console.log('Sources:', response.webResults);
-}
-
-// Full conversation with history
-console.log('Conversation:', response.messages);
-```
-
-### Limitations
-
-- Message history prefilling is currently limited due to unofficial API usage
-- Rate limits are enforced (25 messages/2 hours for non-premium)
+This project is not affiliated with Twitter/X. Use at your own risk and in compliance with Twitter's Terms of Service.
