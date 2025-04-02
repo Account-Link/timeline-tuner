@@ -2,17 +2,19 @@ FROM node:18-alpine
 
 WORKDIR /app
 
+# Install system dependencies
+RUN apk add --no-cache python3 make g++
+
 # Copy package files and install dependencies
 COPY package*.json ./
-COPY pnpm-lock.yaml ./
 RUN npm install -g pnpm
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --ignore-scripts
 
 # Copy the rest of the application
 COPY . .
 
-# Build the application
-RUN pnpm run build
+# Generate Prisma client
+RUN npx prisma generate
 
 # Expose the port the app runs on
 EXPOSE 3000
