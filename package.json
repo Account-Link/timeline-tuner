@@ -30,6 +30,7 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
+    "@prisma/client": "^6.5.0",
     "@roamhq/wrtc": "^0.8.0",
     "@sinclair/typebox": "^0.32.20",
     "body-parser": "^1.20.3",
@@ -41,6 +42,7 @@
     "json-stable-stringify": "^1.0.2",
     "node-fetch": "^3.3.2",
     "otpauth": "^9.2.2",
+    "prisma": "^6.5.0",
     "set-cookie-parser": "^2.6.0",
     "tough-cookie": "^4.1.2",
     "twitter-api-v2": "^1.18.2",

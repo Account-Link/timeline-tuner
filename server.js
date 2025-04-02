@@ -9,6 +9,7 @@ import { Scraper } from 'agent-twitter-client';
 import { Cookie } from 'tough-cookie';
 import { tuner } from './timelineTuner.js';
 import dotenv from 'dotenv';
+import { userDb } from './dist/prisma-client.mjs';
 
 // ES modules fix for __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -76,7 +77,22 @@ app.post('/login-with-credentials', async (req, res) => {
         const profile = await tuner.scraper.me();
         if (profile) {
           req.session.twitterUsername = profile.username;
-          console.log(`Verified profile: @${profile.username}`);
+          req.session.twitterId = profile.id_str || profile.id;
+          console.log(`Verified profile: @${profile.username} (${profile.id_str || profile.id})`);
+          
+          // Check if user is already active in another session
+          const isActive = await userDb.isUserActive(profile.id_str || profile.id);
+          if (isActive) {
+            await tuner.logout();
+            return res.status(403).json({ 
+              success: false, 
+              message: 'This Twitter account is already being used in another active session. Please use a different account or try again later.'
+            });
+          }
+          
+          // Store user in database
+          await userDb.storeUser(profile.id_str || profile.id, profile.username);
+          await userDb.setUserActiveStatus(profile.id_str || profile.id, true);
         }
       } catch (profileError) {
         console.error('Error fetching profile after login:', profileError);
@@ -143,6 +159,21 @@ app.post('/save-cookies', async (req, res) => {
       if (profile) {
         console.log(`Successfully authenticated as: ${profile.username}`);
         req.session.twitterUsername = profile.username;
+        req.session.twitterId = profile.id_str || profile.id;
+        
+        // Check if user is already active in another session
+        const isActive = await userDb.isUserActive(profile.id_str || profile.id);
+        if (isActive) {
+          await scraper.clearCookies();
+          return res.status(403).json({ 
+            success: false, 
+            message: 'This Twitter account is already being used in another active session. Please use a different account or try again later.'
+          });
+        }
+        
+        // Store user in database
+        await userDb.storeUser(profile.id_str || profile.id, profile.username);
+        await userDb.setUserActiveStatus(profile.id_str || profile.id, true);
         
         // Initialize the tuner with the scraper
         tuner.scraper = scraper;
@@ -163,7 +194,7 @@ app.post('/save-cookies', async (req, res) => {
   }
 });
 
-app.get('/dashboard', (req, res) => {
+app.get('/dashboard', async (req, res) => {
   // Check if user is logged in via cookies or credentials
   if (!req.session.isLoggedIn && !req.session.twitterCookies) {
     return res.redirect('/login');
@@ -180,6 +211,18 @@ app.get('/dashboard', (req, res) => {
       currentPreferences = tunerInstance.getPreferences();
     } else if (typeof tunerInstance.getConcept === 'function') {
       currentPreferences = tunerInstance.getConcept();
+    }
+  }
+  
+  // If no current preferences in tuner, try to get from database
+  if ((!currentPreferences || currentPreferences.trim() === '') && req.session.twitterId) {
+    try {
+      const dbPreferences = await userDb.getUserPreferences(req.session.twitterId);
+      if (dbPreferences && dbPreferences.length > 0) {
+        currentPreferences = dbPreferences.join(', ');
+      }
+    } catch (error) {
+      console.error('Error fetching preferences from database:', error);
     }
   }
   
@@ -200,6 +243,16 @@ app.get('/dashboard', (req, res) => {
     }
     if (tunerInstance.enableDislikes !== undefined) {
       engagementSettings.enableDislikes = tunerInstance.enableDislikes;
+    }
+  }
+  
+  // Update user active status in the database
+  if (req.session.twitterId) {
+    // If tuning is active, update database
+    if (isTunerActive || req.session.tuningActive) {
+      await userDb.setUserActiveStatus(req.session.twitterId, true);
+    } else {
+      await userDb.setUserActiveStatus(req.session.twitterId, false);
     }
   }
   
@@ -246,9 +299,22 @@ app.post('/start-tuning', async (req, res) => {
         tunerInstance.enableDislikes = engagementSettings.enableDislikes;
       }
       
+      // Parse preferences into a list of individual preferences
+      const preferencesList = preferences.split(',').map(p => p.trim()).filter(p => p.length > 0);
+      
+      // Store preferences in database if we have the twitter ID
+      if (req.session.twitterId) {
+        await userDb.storeUserPreferences(req.session.twitterId, preferencesList);
+      }
+      
       const startResult = await tunerInstance.start(preferences);
       
       if (startResult) {
+        // Mark user as active in database
+        if (req.session.twitterId) {
+          await userDb.setUserActiveStatus(req.session.twitterId, true);
+        }
+        
         // Mark as active in the session for backup
         req.session.tuningActive = true;
         return res.json({ 
@@ -279,7 +345,7 @@ app.post('/start-tuning', async (req, res) => {
   }
 });
 
-app.post('/stop-tuning', (req, res) => {
+app.post('/stop-tuning', async (req, res) => {
   try {
     // Get tuner instance
     const tunerInstance = req.app.locals.tuner;
@@ -287,6 +353,11 @@ app.post('/stop-tuning', (req, res) => {
     if (tunerInstance && tunerInstance.isActive()) {
       console.log('Stopping timeline tuning');
       tunerInstance.stop();
+    }
+    
+    // Update database user active status
+    if (req.session.twitterId) {
+      await userDb.setUserActiveStatus(req.session.twitterId, false);
     }
     
     // Always update session state
@@ -513,12 +584,17 @@ app.get('/api/activities', (req, res) => {
   }
 });
 
-app.get('/logout', (req, res) => {
+app.get('/logout', async (req, res) => {
   // Stop any running tuning
   try {
     const tunerInstance = req.app.locals.tuner;
     if (tunerInstance && tunerInstance.isActive()) {
       tunerInstance.stop();
+    }
+    
+    // Update database user active status
+    if (req.session.twitterId) {
+      await userDb.setUserActiveStatus(req.session.twitterId, false);
     }
   } catch (err) {
     console.error('Error stopping tuner during logout:', err);
