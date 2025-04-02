@@ -16,6 +16,8 @@
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "stripInternal": true,
+    "moduleResolution": "node",
+    "module": "ESNext",
     "types": ["jest"]
   }
 }
