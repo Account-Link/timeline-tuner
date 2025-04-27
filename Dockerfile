@@ -1,4 +1,4 @@
-FROM node:18-alpine
+FROM --platform=linux/amd64 node:18-alpine
 
 WORKDIR /app
 
@@ -15,9 +15,10 @@ COPY . .
 
 # Generate Prisma client
 RUN npx prisma generate
+RUN pnpm build
 
 # Expose the port the app runs on
-EXPOSE 3000
+EXPOSE 8000
 
 # Start the application
-CMD ["node", "server.js"] 
+CMD ["pnpm", "dev"]
