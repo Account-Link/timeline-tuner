@@ -1,0 +1,17 @@
+services:
+  timeline-tuner:
+    volumes:
+      - /var/run/tappd.sock:/var/run/tappd.sock
+    image: 
+      renchuqiao/timeline-tuner
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - TWITTER_USERNAME=${TWITTER_USERNAME}
+      - TWITTER_PASSWORD=${TWITTER_PASSWORD}
+      - TWITTER_EMAIL=${TWITTER_EMAIL}
+      - HYPERBOLIC_API_KEY=${HYPERBOLIC_API_KEY}
+      - TWITTER_CONSUMER_KEY=${TWITTER_CONSUMER_KEY}
+      - TWITTER_CONSUMER_SECRET=${TWITTER_CONSUMER_SECRET}
+      - PORT=${PORT}
+    ports:
+      - "8000:8000"
