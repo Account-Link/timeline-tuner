@@ -1,0 +1,16 @@
+{
+  "name": "cookie-home-timeline",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node fetch-home.mjs"
+  },
+  "dependencies": {
+    "agent-twitter-client": "file:..",
+    "dotenv": "^16.4.5",
+    "undici": "^7.1.1"
+  }
+}
+
+

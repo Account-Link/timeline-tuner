@@ -77,22 +77,28 @@ app.post('/login-with-credentials', async (req, res) => {
         const profile = await tuner.scraper.me();
         if (profile) {
           req.session.twitterUsername = profile.username;
-          req.session.twitterId = profile.id_str || profile.id;
-          console.log(`Verified profile: @${profile.username} (${profile.id_str || profile.id})`);
-          
-          // Check if user is already active in another session
-          const isActive = await userDb.isUserActive(profile.id_str || profile.id);
-          if (isActive) {
-            await tuner.logout();
-            return res.status(403).json({ 
-              success: false, 
-              message: 'This Twitter account is already being used in another active session. Please use a different account or try again later.'
-            });
+          // Fix: Handle case where both id_str and id might be undefined
+          const twitterId = profile.id_str || profile.id;
+          if (twitterId) {
+            req.session.twitterId = twitterId;
+            console.log(`Verified profile: @${profile.username} (${twitterId})`);
+            
+            // Check if user is already active in another session
+            const isActive = await userDb.isUserActive(twitterId);
+            if (isActive) {
+              await tuner.logout();
+              return res.status(403).json({ 
+                success: false, 
+                message: 'This Twitter account is already being used in another active session. Please use a different account or try again later.'
+              });
+            }
+            
+            // Store user in database
+            await userDb.storeUser(twitterId, profile.username);
+            await userDb.setUserActiveStatus(twitterId, true);
+          } else {
+            console.warn(`Profile found but no valid ID: @${profile.username}`);
           }
-          
-          // Store user in database
-          await userDb.storeUser(profile.id_str || profile.id, profile.username);
-          await userDb.setUserActiveStatus(profile.id_str || profile.id, true);
         }
       } catch (profileError) {
         console.error('Error fetching profile after login:', profileError);
@@ -214,8 +220,9 @@ app.get('/dashboard', async (req, res) => {
     }
   }
   
+  // Fix for the preferences trim issue - around line 218
   // If no current preferences in tuner, try to get from database
-  if ((!currentPreferences || currentPreferences.trim() === '') && req.session.twitterId) {
+  if ((!currentPreferences || (typeof currentPreferences === 'string' && currentPreferences.trim() === '') || (Array.isArray(currentPreferences) && currentPreferences.length === 0)) && req.session.twitterId) {
     try {
       const dbPreferences = await userDb.getUserPreferences(req.session.twitterId);
       if (dbPreferences && dbPreferences.length > 0) {
@@ -256,10 +263,11 @@ app.get('/dashboard', async (req, res) => {
     }
   }
   
+  // Fix for the dashboard rendering - ensure currentPreferences is always a string
   res.render('dashboard', { 
     username: req.session.twitterUsername || 'Twitter User',
     isActive: isTunerActive || req.session.tuningActive || false,
-    concept: currentPreferences || req.session.concept || '', // Still use 'concept' key for template compatibility
+    concept: (typeof currentPreferences === 'string' ? currentPreferences : Array.isArray(currentPreferences) ? currentPreferences.join(', ') : '') || req.session.concept || '', // Ensure it's always a string
     engagementSettings
   });
 });
