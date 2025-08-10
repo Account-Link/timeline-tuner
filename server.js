@@ -5,6 +5,7 @@ import cors from 'cors';
 import { Cookie } from 'tough-cookie';
 import dotenv from 'dotenv';
 import { Pool } from 'pg';
+import net from 'net';
 import {
   Scraper,
   SearchMode,
@@ -18,16 +19,75 @@ const app = express();
 const PORT = process.env.PORT || 8000;
 const DATABASE_URL = process.env.DATABASE_URL;
 const PROXY_URL = process.env.PROXY_URL;
+const HTTP_PROXY_BRIDGE = process.env.HTTP_PROXY_BRIDGE || 'http://127.0.0.1:8118';
 const API_KEY = process.env.API_KEY || process.env.X_API_KEY;
 
 if (!DATABASE_URL) {
   console.error('Missing DATABASE_URL in environment');
 }
 
+// Quick TCP probe to validate an HTTP proxy bridge is reachable
+function verifyHttpBridge(bridgeUrl) {
+  try {
+    const url = new URL(bridgeUrl);
+    const host = url.hostname;
+    const port = parseInt(url.port || (url.protocol === 'https:' ? '443' : '80'), 10);
+
+    return new Promise((resolve) => {
+      const socket = new net.Socket();
+      const timeoutMs = 1500;
+
+      const done = (ok) => {
+        try { socket.destroy(); } catch {}
+        resolve(ok);
+      };
+
+      socket.setTimeout(timeoutMs);
+      socket.once('timeout', () => done(false));
+      socket.once('error', () => done(false));
+      socket.connect(port, host, () => done(true));
+    });
+  } catch {
+    return Promise.resolve(false);
+  }
+}
+
 // Apply proxy via environment if provided
 if (PROXY_URL) {
-  process.env.HTTP_PROXY = PROXY_URL;
-  process.env.HTTPS_PROXY = PROXY_URL;
+  // Check if it's a SOCKS5 URL and show real proxy location
+  if (PROXY_URL.startsWith('socks5://')) {
+    const socksUrl = PROXY_URL.replace('socks5://', '');
+    const parts = socksUrl.split(':');
+    const host = parts[0];
+    const port = parts[1];
+    const username = parts[2] || null;
+    const password = parts[3] || null;
+    
+    // Prefer a local HTTP bridge (Privoxy/gost) if available
+    const httpProxyUrl = HTTP_PROXY_BRIDGE;
+    process.env.HTTP_PROXY = httpProxyUrl;
+    process.env.HTTPS_PROXY = httpProxyUrl;
+    
+    console.log(`🌐 Real SOCKS5 proxy: ${host}:${port}`);
+    console.log(`   → HTTP proxy: ${httpProxyUrl}`);
+    console.log(`   → Credentials: ${username ? '***' : 'none'}`);
+
+    // Probe the HTTP bridge and warn if unreachable
+    verifyHttpBridge(httpProxyUrl).then((ok) => {
+      if (!ok) {
+        console.warn(`⚠️  HTTP proxy bridge not reachable at ${httpProxyUrl}.`);
+        console.warn('   Set up Privoxy (port 8118) or provide HTTP_PROXY_BRIDGE env to a working HTTP proxy.');
+        console.warn('   Continuing without a working proxy may cause outbound requests to fail.');
+      }
+    });
+  } else {
+    // Regular HTTP proxy
+    process.env.HTTP_PROXY = PROXY_URL;
+    process.env.HTTPS_PROXY = PROXY_URL;
+    console.log(`🌐 HTTP proxy enabled: ${PROXY_URL}`);
+  }
+} else {
+  console.log('🌐 No proxy configured - using direct connection');
 }
 
 app.use(bodyParser.urlencoded({ extended: true }));
