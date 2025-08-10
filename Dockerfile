@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 node:18-alpine
+FROM --platform=linux/amd64 node:22-alpine
 
 WORKDIR /app
 
@@ -7,18 +7,16 @@ RUN apk add --no-cache python3 make g++
 
 # Copy package files and install dependencies
 COPY package*.json ./
-RUN npm install -g pnpm
-RUN pnpm install --ignore-scripts
+RUN corepack enable && corepack prepare pnpm@latest --activate
+RUN pnpm install --frozen-lockfile
 
 # Copy the rest of the application
 COPY . .
 
-# Generate Prisma client
-RUN npx prisma generate
 RUN pnpm build
 
 # Expose the port the app runs on
 EXPOSE 8000
 
 # Start the application
-CMD ["pnpm", "dev"]
+CMD ["node", "server.js"]

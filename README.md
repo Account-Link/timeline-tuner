@@ -1,131 +1,210 @@
-# Twitter Timeline Tuner
+# Agent Twitter API (API-only)
 
-<div align="center">
-  <img src="public/images/homepageshow.png" alt="Twitter Timeline Tuner" width="600">
-  <p>A powerful tool for optimizing your Twitter timeline algorithm using advanced engagement strategies.</p>
-</div>
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
-
-## 🌟 Overview
-
-Twitter Timeline Tuner is a sophisticated open-source tool designed to help users train their Twitter timeline algorithm to show more content related to their interests. Unlike simple approaches that only like tweets or use "show less often" feedback, this tool implements a comprehensive strategy that leverages Twitter's full algorithmic signals:
-
-- **🔍 High-value engagement metrics**: Simulates staying on tweets for 2+ minutes, which Twitter's algorithm weights heavily
-- **👤 Profile visits and engagement**: Systematically visits profiles of relevant content creators and engages with multiple posts
-- **🔄 Strategic content discovery**: Uses search and keyword analysis to find and engage with relevant content
-- **👎 Intelligent feedback**: Provides targeted negative feedback for irrelevant content
-
-## ✨ Features
-
-- **🖥️ Web interface**: Easy-to-use dashboard for managing your timeline tuning
-- **🧠 Concept-based tuning**: Specify what topics or concepts you want to see more of
-- **📊 Advanced analytics**: Track the convergence of your timeline with detailed metrics
-- **🔐 OAuth integration**: Simple one-click login with Twitter (no need to copy cookies manually)
-- **🍪 Alternative cookie-based authentication**: Option to use your browser cookies as an alternative method
-- **🔒 Privacy-focused**: Authentication data is only stored in your browser session, not on any server
-
-## 🚀 Installation
-
-1. Clone this repository:
-```bash
-git clone https://github.com/your-username/twitter-timeline-tuner.git
-cd twitter-timeline-tuner
 ```
-
-2. Install dependencies:
-```bash
-npm install
-# or if you use pnpm
-pnpm install
-```
-
-3. Create a `.env` file with the following content:
-```
-PORT=3000
-SESSION_SECRET=your-session-secret
-HYPERBOLIC_API_KEY=your-api-key-if-available
-TWITTER_CONSUMER_KEY=your-twitter-api-key
-TWITTER_CONSUMER_SECRET=your-twitter-api-secret
-CALLBACK_URL=http://localhost:3000/auth/twitter/callback
-```
-
-> **Note**: To enable OAuth login, you need to:
-> - Create a Twitter Developer account at https://developer.twitter.com
-> - Create a new project and app
-> - Set up the OAuth 1.0a settings and get your consumer key and secret
-> - Add the callback URL to your app's settings in the Twitter Developer Portal
-
-4. Start the server:
-```bash
-npm start
-# or
+screen -S fyp-api
+screen -r fyp-api
 pnpm start
 ```
 
-## 📖 Usage
+Minimal Express API that authenticates to X/Twitter using cookie sessions stored in your database. No frontend. No username/password flows.
 
-1. Open `http://localhost:3000` in your browser
-2. Choose one of the login methods:
-   - **OAuth Login (Recommended)**: Click "Log in with Twitter" for a seamless one-click authentication
-   - **Alternative Method**: Follow the instructions to manually extract and paste your Twitter cookies
-3. Enter the concept you want to see more of in your timeline
-4. Start the tuning process
-5. Monitor progress in the analytics section
+## Overview
 
-## ⚙️ How It Works
+- Auth is resolved from `x_sessions` in your database (see schema expectations below)
+- You can select a session per-request via query params
+- Endpoints expose basic Twitter actions and data (me, home timeline, tweet, search, likes)
 
-The Timeline Tuner uses a multi-pronged approach to optimize your Twitter algorithm:
+## Environment
 
-### Strategic Viewing
-The Twitter algorithm assigns high weight (11 points) to tweets that users spend significant time on, especially those viewed for 2+ minutes. Our tuner simulates this deep engagement with relevant content.
+Create `.env`:
 
-### Profile Visits
-Visiting a creator's profile and engaging with multiple posts sends a strong signal (12 points) to the algorithm that you value this creator's content.
-
-### Content Discovery
-The tuner actively searches for content matching your interests, performing targeted engagement to strengthen the algorithm's understanding of your preferences.
-
-### Negative Feedback
-For irrelevant content, the tuner applies the most effective forms of negative feedback, further refining the algorithm.
-
-## 🧪 Testing
-
-Run the test suite with:
-
-```bash
-npm test
-# or
-pnpm test
+```
+DATABASE_URL=postgres://user:pass@host:5432/dbname
+PROXY_URL=http://user:pass@proxyhost:port   # optional
+PORT=8000                                   # optional, defaults to 8000
+SESSION_SECRET=some-secret                  # optional
 ```
 
-## 🤝 Contributing
+If `PROXY_URL` is set, outbound HTTP(S) requests use it.
 
-Contributions are welcome! Here's how you can help:
+## Expected DB schema
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+Table `x_sessions` should contain at least:
 
-Please read our [Code of Conduct](CODE_OF_CONDUCT.md) before contributing.
+- `id` (primary key)
+- `auth_token` (text)
+- `user_agent` (text)
+- `cookies_json` (text/json) — optional, not used by the server
+- `cookie_string` (text) — a full Cookie header string with keys like `kdt`, `ct0`, `guest_id`, `auth_token`, `twid`, etc.
+- `created_at` (timestamp)
+- `updated_at` (timestamp)
 
-## 📜 License
+Example row:
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+```
+1, "9f41dbea3928c4239b2482265df47c7d794aebdc", "Mozilla/5.0 (iPhone; ... Safari/604.1)",
+"{ ... }",
+"kdt=...; ct0=...; guest_id=...; auth_token=9f41d...; twid=u%3D...",
+"2025-08-09 00:16:14.305848+00", "2025-08-09 00:16:14.305848+00"
+```
 
-## 👥 Maintainers
+The server authenticates a client by parsing `cookie_string`.
 
-- [Maintainer Name](https://github.com/maintainer) - *Initial work*
+## Session resolution per request
 
-## ⚠️ Disclaimer
+You can choose which session the request uses by adding one of these query params:
 
-This project is not affiliated with Twitter/X. Use at your own risk and in compliance with Twitter's Terms of Service.
+- `?session_id=<id>` — uses the row by `x_sessions.id`
+- `?auth_token=<token>` — uses the row by `x_sessions.auth_token` (most recent)
+- No param — uses the most recently updated row
 
----
+## Install & run
 
-<div align="center">
-  <p>Made with ❤️ by the open-source community</p>
-</div>
+```bash
+pnpm install
+pnpm start
+# Server runs on http://localhost:8000 by default
+```
+
+## Endpoints
+
+- GET `/health` → `{ ok: true }`
+- GET `/api/session/latest` → metadata of the latest DB session (debug)
+- GET `/api/me` → current logged-in profile
+- GET `/api/home-timeline?count=50` → home timeline (max 200)
+- GET `/api/tweet/:id` → tweet by ID
+- GET `/api/search?q=term&count=20&mode=Top|Latest` → search tweets (count max 100)
+- GET `/api/likes/:username?count=50` → tweets liked by `:username` (count max 200)
+
+Notes
+- Add `?session_id=` or `?auth_token=` to use a specific DB session
+- Errors: 401 (no valid session), 404 (not found), 500 (server error)
+
+## curl examples
+
+Set a base URL for convenience:
+
+```bash
+BASE=http://localhost:8000
+```
+
+Health:
+
+```bash
+curl -s "$BASE/health"
+```
+
+Latest session metadata:
+
+```bash
+curl -s "$BASE/api/session/latest" | jq
+```
+
+Current user (latest session):
+
+```bash
+curl -s "$BASE/api/me" | jq
+```
+
+Current user by session id:
+
+```bash
+curl -s "$BASE/api/me?session_id=1" | jq
+```
+
+Current user by auth_token:
+
+```bash
+curl -s "$BASE/api/me?auth_token=9f41dbea3928c4239b2482265df47c7d794aebdc" | jq
+```
+
+Home timeline (default 50):
+
+```bash
+curl -s "$BASE/api/home-timeline" | jq
+```
+
+Home timeline for session id, count=100:
+
+```bash
+curl -s "$BASE/api/home-timeline?session_id=1&count=100" | jq
+```
+
+Tweet by ID:
+
+```bash
+curl -s "$BASE/api/tweet/1870000000000000000?session_id=1" | jq
+```
+
+Search Top (default 20):
+
+```bash
+curl -s "$BASE/api/search?q=machine%20learning" | jq
+```
+
+Search Latest, count=50, session id:
+
+```bash
+curl -s "$BASE/api/search?q=machine%20learning&mode=Latest&count=50&session_id=1" | jq
+```
+
+Liked tweets by username (default 50):
+
+```bash
+curl -s "$BASE/api/likes/elonmusk" | jq
+```
+
+Liked tweets by username, count=100, session id:
+
+```bash
+curl -s "$BASE/api/likes/elonmusk?count=100&session_id=1" | jq
+```
+
+Use auth_token instead of session id:
+
+```bash
+curl -s "$BASE/api/likes/elonmusk?auth_token=9f41dbea3928c4239b2482265df47c7d794aebdc" | jq
+```
+
+## iOS / mobile client access
+
+To allow native apps to call the API directly:
+
+- Set an API key in your environment (recommended in production):
+
+```
+API_KEY=your-strong-random-key
+# Optionally restrict CORS for web clients
+ALLOWED_ORIGINS=https://your-webapp.example,https://another.example
+```
+
+- Send the key on requests via header or query:
+  - Header: `X-API-Key: your-strong-random-key`
+  - Query param: `?api_key=your-strong-random-key` (use only over HTTPS)
+
+- Example iOS URLRequest (Swift):
+
+```swift
+var request = URLRequest(url: URL(string: "https://api.example.com/api/home-timeline?count=50")!)
+request.httpMethod = "GET"
+request.setValue("your-strong-random-key", forHTTPHeaderField: "X-API-Key")
+// Perform with URLSession
+```
+
+Notes
+- CORS is enabled for browser-based clients; native iOS apps are not restricted by CORS.
+- Always serve this API over HTTPS. If you run on-device with a non-TLS URL during development, configure ATS exceptions accordingly.
+
+## Proxy usage
+
+Start the server with a proxy:
+
+```bash
+export PROXY_URL=http://user:pass@host:port
+pnpm start
+```
+
+## License
+
+MIT

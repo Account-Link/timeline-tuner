@@ -1,618 +1,346 @@
 import express from 'express';
 import session from 'express-session';
 import bodyParser from 'body-parser';
-import cookieParser from 'cookie-parser';
-import path from 'path';
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-import { Scraper } from 'agent-twitter-client';
+import cors from 'cors';
 import { Cookie } from 'tough-cookie';
-import { tuner } from './timelineTuner.js';
 import dotenv from 'dotenv';
-import { userDb } from './dist/prisma-client.mjs';
-
-// ES modules fix for __dirname
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import { Pool } from 'pg';
+import {
+  Scraper,
+  SearchMode,
+  getUserIdByScreenName,
+  fetchLikedTweets,
+} from './dist/node/esm/index.mjs';
 
 dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 8000;
+const DATABASE_URL = process.env.DATABASE_URL;
+const PROXY_URL = process.env.PROXY_URL;
+const API_KEY = process.env.API_KEY || process.env.X_API_KEY;
 
-// Middleware
+if (!DATABASE_URL) {
+  console.error('Missing DATABASE_URL in environment');
+}
+
+// Apply proxy via environment if provided
+if (PROXY_URL) {
+  process.env.HTTP_PROXY = PROXY_URL;
+  process.env.HTTPS_PROXY = PROXY_URL;
+}
+
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
-app.use(cookieParser());
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'timeline-tuner-secret',
+// Allow cross-origin requests (useful for web clients; harmless for native iOS)
+// In production, prefer restricting origin(s) via env (e.g., ALLOWED_ORIGINS)
+const allowedOriginsEnv = process.env.ALLOWED_ORIGINS; // comma-separated
+const allowedOrigins = allowedOriginsEnv
+  ? allowedOriginsEnv.split(',').map((s) => s.trim()).filter(Boolean)
+  : undefined;
+
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      if (!origin || !allowedOrigins) return callback(null, true);
+      return callback(null, allowedOrigins.includes(origin));
+    },
+    credentials: false,
+  })
+);
+app.use(
+  session({
+    secret: process.env.SESSION_SECRET || 'api-session-secret',
   resave: false,
   saveUninitialized: true,
-  cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 } // 24 hours
-}));
-app.use(express.static(path.join(__dirname, 'public')));
+    cookie: { secure: false, maxAge: 24 * 60 * 60 * 1000 },
+  })
+);
 
-// Set EJS as the template engine
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
+// DB
+const pool = new Pool({ connectionString: DATABASE_URL });
 
-// Routes
-app.get('/', (req, res) => {
-  const isLoggedIn = req.session.twitterCookies ? true : false;
-  res.render('index', { isLoggedIn });
-});
+// Cache scrapers per session key
+const sessionKeyToScraper = new Map();
 
-app.get('/login', (req, res) => {
-  // If error parameter is present, pass it to the template
-  const error = req.query.error || null;
-  res.render('login', { error, oauthEnabled: false });
-});
+function parseCookieStringToCookies(cookieHeader) {
+  if (!cookieHeader || typeof cookieHeader !== 'string') return [];
+  return cookieHeader
+    .split(';')
+    .map((s) => s.trim())
+    .filter((s) => s && s.includes('='))
+    .map((s) => Cookie.parse(s))
+    .filter(Boolean);
+}
 
-// Login with Twitter credentials
-app.post('/login-with-credentials', async (req, res) => {
+async function getAllSessionsFromDb(limit = 50) {
+  const client = await pool.connect();
   try {
-    const { username, password, email } = req.body;
-    
-    if (!username || !password) {
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Username and password are required' 
-      });
-    }
-
-    console.log(`Attempting login for user: @${username}`);
-    
-    // Create and initialize the tuner with credentials
-    const loginResult = await tuner.login(username, password, email);
-    
-    if (loginResult) {
-      console.log(`Successfully logged in as: @${username}`);
-      
-      // Store login info in session
-      req.session.twitterUsername = username;
-      req.session.isLoggedIn = true;
-      
-      // Get profile to verify authentication
-      try {
-        const profile = await tuner.scraper.me();
-        if (profile) {
-          req.session.twitterUsername = profile.username;
-          // Fix: Handle case where both id_str and id might be undefined
-          const twitterId = profile.id_str || profile.id;
-          if (twitterId) {
-            req.session.twitterId = twitterId;
-            console.log(`Verified profile: @${profile.username} (${twitterId})`);
-            
-            // Check if user is already active in another session
-            const isActive = await userDb.isUserActive(twitterId);
-            if (isActive) {
-              await tuner.logout();
-              return res.status(403).json({ 
-                success: false, 
-                message: 'This Twitter account is already being used in another active session. Please use a different account or try again later.'
-              });
-            }
-            
-            // Store user in database
-            await userDb.storeUser(twitterId, profile.username);
-            await userDb.setUserActiveStatus(twitterId, true);
-          } else {
-            console.warn(`Profile found but no valid ID: @${profile.username}`);
-          }
-        }
-      } catch (profileError) {
-        console.error('Error fetching profile after login:', profileError);
-      }
-      
-      // Store the tuner instance in the application for use across requests
-      req.app.locals.tuner = tuner;
-
-      return res.json({ 
-        success: true, 
-        message: 'Login successful',
-        username: req.session.twitterUsername
-      });
-    } else {
-      return res.status(401).json({ 
-        success: false, 
-        message: 'Login failed. Please check your credentials.'
-      });
-    }
-  } catch (error) {
-    console.error('Error during login:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Error during login: ' + (error.message || 'Unknown error')
-    });
+    const { rows } = await client.query(
+      `SELECT 
+         id, 
+         auth_token_cookie AS auth_token,
+         user_agent,
+         cookies AS cookies_json,
+         raw_cookie_header AS cookie_string,
+         created_at,
+         COALESCE(updated_at, created_at) AS updated_at
+       FROM x_sessions 
+       ORDER BY COALESCE(updated_at, created_at) DESC
+       LIMIT $1`,
+      [limit]
+    );
+    return rows;
+  } finally {
+    client.release();
   }
-});
+}
 
-app.post('/save-cookies', async (req, res) => {
+async function getSessionFromDb({ id, authToken } = {}) {
+  const client = await pool.connect();
   try {
-    // Parse the cookies from the request body
-    const twitterCookies = req.body.cookies;
-    
-    if (!twitterCookies || twitterCookies.length === 0) {
-      return res.status(400).json({ success: false, message: 'No cookies provided' });
+    if (id != null) {
+      const { rows } = await client.query(
+        `SELECT 
+           id, 
+           auth_token_cookie AS auth_token,
+           user_agent,
+           cookies AS cookies_json,
+           raw_cookie_header AS cookie_string,
+           created_at,
+           COALESCE(updated_at, created_at) AS updated_at
+         FROM x_sessions WHERE id = $1 LIMIT 1`,
+        [id]
+      );
+      return rows[0] || null;
     }
+    if (authToken) {
+      const { rows } = await client.query(
+        `SELECT 
+           id, 
+           auth_token_cookie AS auth_token,
+           user_agent,
+           cookies AS cookies_json,
+           raw_cookie_header AS cookie_string,
+           created_at,
+           COALESCE(updated_at, created_at) AS updated_at
+         FROM x_sessions WHERE auth_token_cookie = $1 
+         ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 1`,
+        [authToken]
+      );
+      return rows[0] || null;
+    }
+    const { rows } = await client.query(
+      `SELECT 
+         id, 
+         auth_token_cookie AS auth_token,
+         user_agent,
+         cookies AS cookies_json,
+         raw_cookie_header AS cookie_string,
+         created_at,
+         COALESCE(updated_at, created_at) AS updated_at
+       FROM x_sessions 
+       ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 1`
+    );
+    return rows[0] || null;
+  } finally {
+    client.release();
+  }
+}
 
-    // Store cookies in session
-    req.session.twitterCookies = twitterCookies;
-    req.session.twitterUsername = req.body.username || 'Twitter User';
-    req.session.isLoggedIn = true;
-    
-    console.log('Manual cookie login:');
-    console.log(`Received ${twitterCookies.length} cookies from form submission`);
-    twitterCookies.forEach((cookieStr, index) => {
-      console.log(`Raw Cookie ${index + 1}: ${cookieStr.substring(0, 15)}...`);
-    });
-    
-    // Test cookies by checking if we can access Twitter
-    const scraper = new Scraper();
-    const cookieObjects = twitterCookies.map(cookieStr => Cookie.parse(cookieStr));
-    
-    console.log('Parsed cookie objects:');
-    cookieObjects.forEach((cookie, index) => {
-      console.log(`Cookie ${index + 1}: ${cookie.key}=${cookie.value.substring(0, 5)}...`);
-    });
-    
-    await scraper.setCookies(cookieObjects);
-    console.log('Cookies set in scraper');
-    
-    // Try to get the user's profile
-    try {
-      const profile = await scraper.me();
-      if (profile) {
-        console.log(`Successfully authenticated as: ${profile.username}`);
-        req.session.twitterUsername = profile.username;
-        req.session.twitterId = profile.id_str || profile.id;
-        
-        // Check if user is already active in another session
-        const isActive = await userDb.isUserActive(profile.id_str || profile.id);
-        if (isActive) {
-          await scraper.clearCookies();
-          return res.status(403).json({ 
-            success: false, 
-            message: 'This Twitter account is already being used in another active session. Please use a different account or try again later.'
-          });
-        }
-        
-        // Store user in database
-        await userDb.storeUser(profile.id_str || profile.id, profile.username);
-        await userDb.setUserActiveStatus(profile.id_str || profile.id, true);
-        
-        // Initialize the tuner with the scraper
-        tuner.scraper = scraper;
-        req.app.locals.tuner = tuner;
-        
-        return res.json({ success: true, message: 'Cookies saved successfully', username: profile.username });
-      } else {
-        console.log('Could not fetch profile, but no error was thrown');
-      }
-    } catch (error) {
-      console.error('Error verifying profile:', error);
-    }
-    
-    return res.json({ success: true, message: 'Cookies saved but could not verify profile' });
-  } catch (error) {
-    console.error('Error saving cookies:', error);
-    return res.status(500).json({ success: false, message: 'Error saving cookies' });
-  }
-});
+async function getScraperForRequest(req) {
+  const sessionId = req.params.sessionId
+    ? String(req.params.sessionId)
+    : req.query.session_id
+    ? String(req.query.session_id)
+    : null;
+  const authToken = req.query.auth_token ? String(req.query.auth_token) : null;
 
-app.get('/dashboard', async (req, res) => {
-  // Check if user is logged in via cookies or credentials
-  if (!req.session.isLoggedIn && !req.session.twitterCookies) {
-    return res.redirect('/login');
+  const cacheKey = sessionId || authToken || 'latest';
+  if (sessionKeyToScraper.has(cacheKey)) {
+    return sessionKeyToScraper.get(cacheKey);
   }
-  
-  // Get tuner instance if available
-  const tunerInstance = req.app.locals.tuner;
-  const isTunerActive = tunerInstance && tunerInstance.isActive();
-  
-  // Get current preferences (use getPreferences method, with fallback to getConcept for backwards compatibility)
-  let currentPreferences = '';
-  if (tunerInstance) {
-    if (typeof tunerInstance.getPreferences === 'function') {
-      currentPreferences = tunerInstance.getPreferences();
-    } else if (typeof tunerInstance.getConcept === 'function') {
-      currentPreferences = tunerInstance.getConcept();
-    }
+
+  const dbSession = await getSessionFromDb({ id: sessionId, authToken });
+  if (!dbSession) {
+    return null;
   }
-  
-  // Fix for the preferences trim issue - around line 218
-  // If no current preferences in tuner, try to get from database
-  if ((!currentPreferences || (typeof currentPreferences === 'string' && currentPreferences.trim() === '') || (Array.isArray(currentPreferences) && currentPreferences.length === 0)) && req.session.twitterId) {
+
+  const scraper = new Scraper();
+  const cookieHeader = dbSession.cookie_string || '';
+  const cookieObjects = parseCookieStringToCookies(cookieHeader);
+  if (cookieObjects.length === 0) {
+    return null;
+  }
+  await scraper.setCookies(cookieObjects);
+
+  sessionKeyToScraper.set(cacheKey, scraper);
+  return scraper;
+}
+
+// Simple API key middleware for all /api routes
+function requireApiKey(req, res, next) {
+  // If no API key configured, allow all (useful for local/dev)
+  if (!API_KEY) return next();
+  const headerKey = req.header('x-api-key') || req.header('X-API-Key');
+  const queryKey = req.query.api_key ? String(req.query.api_key) : null;
+  if (headerKey === API_KEY || queryKey === API_KEY) return next();
+  return res.status(401).json({ success: false, message: 'Invalid API key' });
+}
+
+function requireScraper(handler) {
+  return async (req, res) => {
     try {
-      const dbPreferences = await userDb.getUserPreferences(req.session.twitterId);
-      if (dbPreferences && dbPreferences.length > 0) {
-        currentPreferences = dbPreferences.join(', ');
+      const scraper = await getScraperForRequest(req);
+      if (!scraper) {
+        return res.status(401).json({ success: false, message: 'No valid session available' });
       }
-    } catch (error) {
-      console.error('Error fetching preferences from database:', error);
+      return handler(req, res, scraper);
+    } catch (err) {
+      console.error(err);
+      return res.status(500).json({ success: false, message: err.message || 'Unknown error' });
     }
-  }
-  
-  // Get engagement settings for UI
-  const engagementSettings = {
-    enableLikes: true,     // Default to true
-    enableFollows: true,   // Default to true
-    enableDislikes: true   // Default to true
   };
-  
-  // Override with actual settings if tuner exists
-  if (tunerInstance) {
-    if (tunerInstance.enableLikes !== undefined) {
-      engagementSettings.enableLikes = tunerInstance.enableLikes;
-    }
-    if (tunerInstance.enableFollows !== undefined) {
-      engagementSettings.enableFollows = tunerInstance.enableFollows;
-    }
-    if (tunerInstance.enableDislikes !== undefined) {
-      engagementSettings.enableDislikes = tunerInstance.enableDislikes;
-    }
-  }
-  
-  // Update user active status in the database
-  if (req.session.twitterId) {
-    // If tuning is active, update database
-    if (isTunerActive || req.session.tuningActive) {
-      await userDb.setUserActiveStatus(req.session.twitterId, true);
-    } else {
-      await userDb.setUserActiveStatus(req.session.twitterId, false);
-    }
-  }
-  
-  // Fix for the dashboard rendering - ensure currentPreferences is always a string
-  res.render('dashboard', { 
-    username: req.session.twitterUsername || 'Twitter User',
-    isActive: isTunerActive || req.session.tuningActive || false,
-    concept: (typeof currentPreferences === 'string' ? currentPreferences : Array.isArray(currentPreferences) ? currentPreferences.join(', ') : '') || req.session.concept || '', // Ensure it's always a string
-    engagementSettings
-  });
-});
+}
 
-app.post('/start-tuning', async (req, res) => {
+// Health
+app.get('/health', (req, res) => res.json({ ok: true }));
+
+// Apply API key protection to all API endpoints
+app.use('/api', requireApiKey);
+
+// Accounts list (with minimal profile)
+app.get('/api/accounts', async (req, res) => {
   try {
-    // Check if user is logged in via cookies or credentials
-    if (!req.session.isLoggedIn && !req.session.twitterCookies) {
-      return res.status(401).json({ success: false, message: 'Not logged in' });
-    }
-    
-    const { concept } = req.body; // Still accepting 'concept' from frontend for backward compatibility
-    const preferences = concept; // Map to 'preferences' for new terminology
-    
-    if (!preferences || preferences.trim() === '') {
-      return res.status(400).json({ success: false, message: 'Content preference is required' });
-    }
-    
-    // Store the preferences in the session (still using concept key for compatibility)
-    req.session.concept = preferences;
-    
-    // Get tuner instance
-    const tunerInstance = req.app.locals.tuner;
-    
-    if (tunerInstance && tunerInstance.scraper) {
-      console.log(`Starting timeline tuning with preferences: "${preferences}"`);
-      
-      // Parse engagement settings from request if available
-      const engagementSettings = req.body.engagementSettings || {};
-      if (engagementSettings.enableLikes !== undefined) {
-        tunerInstance.enableLikes = engagementSettings.enableLikes;
-      }
-      if (engagementSettings.enableFollows !== undefined) {
-        tunerInstance.enableFollows = engagementSettings.enableFollows;
-      }
-      if (engagementSettings.enableDislikes !== undefined) {
-        tunerInstance.enableDislikes = engagementSettings.enableDislikes;
-      }
-      
-      // Parse preferences into a list of individual preferences
-      const preferencesList = preferences.split(',').map(p => p.trim()).filter(p => p.length > 0);
-      
-      // Store preferences in database if we have the twitter ID
-      if (req.session.twitterId) {
-        await userDb.storeUserPreferences(req.session.twitterId, preferencesList);
-      }
-      
-      const startResult = await tunerInstance.start(preferences);
-      
-      if (startResult) {
-        // Mark user as active in database
-        if (req.session.twitterId) {
-          await userDb.setUserActiveStatus(req.session.twitterId, true);
-        }
-        
-        // Mark as active in the session for backup
-        req.session.tuningActive = true;
-        return res.json({ 
-          success: true, 
-          message: 'Timeline tuning started using your preferences'
+    const limit = Math.min(parseInt(req.query.limit) || 20, 100);
+    const sessions = await getAllSessionsFromDb(limit);
+
+    // Hydrate with profile info (sequential to avoid rate/race)
+    const results = [];
+    for (const s of sessions) {
+      try {
+        const scraper = new Scraper();
+        const cookies = parseCookieStringToCookies(s.cookie_string);
+        if (cookies.length === 0) continue;
+        await scraper.setCookies(cookies);
+        const profile = await scraper.me();
+        results.push({
+          id: s.id,
+          auth_token: s.auth_token,
+          updated_at: s.updated_at,
+          username: profile?.username || null,
+          name: profile?.name || null,
+          user_id: profile?.id || profile?.id_str || null,
+          profile_image_url: profile?.profile_image_url_https || profile?.profile_image_url || null,
         });
-      } else {
-        return res.status(500).json({ 
-          success: false, 
-          message: 'Failed to start timeline tuning' 
-        });
+      } catch {
+        // skip bad session
       }
-    } else {
-      // Fallback to legacy approach
-      req.session.tuningActive = true;
-      console.log('Tuner not initialized, using session-only mode');
+    }
+
+    return res.json({ success: true, accounts: results });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ success: false, message: e.message || 'Unknown error' });
+  }
+});
+
+// Current user (latest or by query)
+app.get(
+  '/api/me',
+  requireScraper(async (req, res, scraper) => {
+    const profile = await scraper.me();
+    return res.json({ success: true, profile });
+  })
+);
+
+// Account-scoped profile
+app.get(
+  '/api/accounts/:sessionId/me',
+  requireScraper(async (req, res, scraper) => {
+    const profile = await scraper.me();
+    return res.json({ success: true, profile });
+  })
+);
+
+// Home timeline (latest or by query)
+app.get(
+  '/api/home-timeline',
+  requireScraper(async (req, res, scraper) => {
+    const count = Math.min(parseInt(req.query.count) || 50, 200);
+    const timeline = await scraper.fetchHomeTimeline(count, []);
+    return res.json({ success: true, timeline });
+  })
+);
+
+// Account-scoped home timeline
+app.get(
+  '/api/accounts/:sessionId/home',
+  requireScraper(async (req, res, scraper) => {
+    const count = Math.min(parseInt(req.query.count) || 50, 200);
+    const timeline = await scraper.fetchHomeTimeline(count, []);
+    return res.json({ success: true, timeline });
+  })
+);
+
+// Tweet by id
+app.get(
+  '/api/tweet/:id',
+  requireScraper(async (req, res, scraper) => {
+    const tweet = await scraper.getTweet(req.params.id);
+    return res.json({ success: true, tweet });
+  })
+);
+
+// Search
+app.get(
+  '/api/search',
+  requireScraper(async (req, res, scraper) => {
+    const q = req.query.q;
+    if (!q) return res.status(400).json({ success: false, message: 'Missing query parameter q' });
+    const count = Math.min(parseInt(req.query.count) || 20, 100);
+    const modeStr = (req.query.mode || 'Top').toString();
+    const mode = modeStr.toLowerCase() === 'latest' ? SearchMode.Latest : SearchMode.Top;
+    const page = await scraper.fetchSearchTweets(q, count, mode);
+    return res.json({ success: true, page });
+  })
+);
+
+// Liked tweets of a user
+app.get(
+  '/api/likes/:username',
+  requireScraper(async (req, res, scraper) => {
+    const username = req.params.username;
+    const max = Math.min(parseInt(req.query.count) || 50, 200);
+    const userIdRes = await getUserIdByScreenName(username, scraper.auth);
+    if (!userIdRes.success)
+      return res.status(404).json({ success: false, message: userIdRes.err?.message || 'User not found' });
+    const data = await fetchLikedTweets(userIdRes.value, max, undefined, scraper.auth);
+    return res.json({ success: true, data });
+  })
+);
+
+// Latest session info (debug)
+app.get('/api/session/latest', async (req, res) => {
+  try {
+    const s = await getSessionFromDb();
+    if (!s) return res.status(404).json({ success: false, message: 'No session found' });
       return res.json({ 
         success: true, 
-        message: 'Timeline tuning started in legacy mode'
-      });
-    }
-  } catch (error) {
-    console.error('Error starting tuning:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Error starting tuning: ' + (error.message || 'Unknown error') 
+      session: {
+        id: s.id,
+        auth_token: s.auth_token,
+        user_agent: s.user_agent,
+        created_at: s.created_at,
+        updated_at: s.updated_at,
+      },
     });
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ success: false, message: e.message || 'Unknown error' });
   }
 });
 
-app.post('/stop-tuning', async (req, res) => {
-  try {
-    // Get tuner instance
-    const tunerInstance = req.app.locals.tuner;
-    
-    if (tunerInstance && tunerInstance.isActive()) {
-      console.log('Stopping timeline tuning');
-      tunerInstance.stop();
-    }
-    
-    // Update database user active status
-    if (req.session.twitterId) {
-      await userDb.setUserActiveStatus(req.session.twitterId, false);
-    }
-    
-    // Always update session state
-    req.session.tuningActive = false;
-    
-    return res.json({ success: true, message: 'Timeline tuning stopped' });
-  } catch (error) {
-    console.error('Error stopping tuning:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Error stopping tuning: ' + (error.message || 'Unknown error')
-    });
-  }
-});
-
-// API endpoint to update tuner settings while running
-// API endpoint to save user settings
-app.post('/save-settings', (req, res) => {
-  try {
-    // Check if user is logged in
-    if (!req.session.isLoggedIn && !req.session.twitterCookies) {
-      return res.status(401).json({ success: false, message: 'Not logged in' });
-    }
-    
-    // Get settings from the request
-    const { autoStop, tuningAggression, engagementSettings, notifications } = req.body;
-    
-    // Store settings in session
-    req.session.settings = {
-      autoStop,
-      tuningAggression,
-      notifications
-    };
-    
-    // Get tuner instance and update engagement settings if available
-    const tunerInstance = req.app.locals.tuner;
-    if (tunerInstance && engagementSettings) {
-      if (engagementSettings.enableLikes !== undefined) {
-        tunerInstance.enableLikes = engagementSettings.enableLikes;
-      }
-      
-      if (engagementSettings.enableFollows !== undefined) {
-        tunerInstance.enableFollows = engagementSettings.enableFollows;
-      }
-      
-      if (engagementSettings.enableDislikes !== undefined) {
-        tunerInstance.enableDislikes = engagementSettings.enableDislikes;
-      }
-      
-      console.log(`Saved tuner settings: likes=${tunerInstance.enableLikes}, follows=${tunerInstance.enableFollows}, dislikes=${tunerInstance.enableDislikes}`);
-    }
-    
-    return res.json({ success: true, message: 'Settings saved successfully' });
-  } catch (error) {
-    console.error('Error saving settings:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Error saving settings: ' + (error.message || 'Unknown error')
-    });
-  }
-});
-
-app.post('/update-tuner-settings', (req, res) => {
-  try {
-    // Check if user is logged in
-    if (!req.session.isLoggedIn && !req.session.twitterCookies) {
-      return res.status(401).json({ success: false, message: 'Not logged in' });
-    }
-    
-    // Get tuner instance
-    const tunerInstance = req.app.locals.tuner;
-    
-    if (tunerInstance) {
-      const { enableLikes, enableFollows, enableDislikes } = req.body;
-      
-      // Update tuner settings
-      if (enableLikes !== undefined) {
-        tunerInstance.enableLikes = enableLikes;
-      }
-      
-      if (enableFollows !== undefined) {
-        tunerInstance.enableFollows = enableFollows;
-      }
-      
-      if (enableDislikes !== undefined) {
-        tunerInstance.enableDislikes = enableDislikes;
-      }
-      
-      console.log(`Updated tuner settings: likes=${tunerInstance.enableLikes}, follows=${tunerInstance.enableFollows}, dislikes=${tunerInstance.enableDislikes}`);
-      
-      return res.json({ 
-        success: true, 
-        message: 'Tuner settings updated successfully'
-      });
-    } else {
-      return res.status(404).json({ 
-        success: false, 
-        message: 'Tuner instance not found' 
-      });
-    }
-  } catch (error) {
-    console.error('Error updating tuner settings:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Error updating tuner settings: ' + (error.message || 'Unknown error')
-    });
-  }
-});
-
-app.get('/api/analytics', (req, res) => {
-  try {
-    // Get tuner instance
-    const tunerInstance = req.app.locals.tuner;
-    
-    if (tunerInstance) {
-      // Get base analytics
-      const analyticsData = tunerInstance.getAnalytics();
-      
-      // Add recent activities if they exist in the tuner
-      if (tunerInstance.getRecentActivities) {
-        analyticsData.recentActivities = tunerInstance.getRecentActivities();
-      } else {
-        // No mock data
-        analyticsData.recentActivities = [];
-      }
-      
-      // Add interest management data if available
-      if (tunerInstance.lastInterestUpdate) {
-        analyticsData.interestManagement = {
-          timestamp: tunerInstance.lastInterestUpdate,
-          totalInterests: tunerInstance.interestData ? tunerInstance.interestData.totalInterests : 0,
-          disabledCount: tunerInstance.interestData ? tunerInstance.interestData.disabledCount : 0,
-          preferredInterests: tunerInstance.preferredInterests || []
-        };
-      }
-      
-      // Add additional analytics data for console visualization
-      if (tunerInstance.getDetailedAnalytics) {
-        // If the tuner has a dedicated method for detailed analytics, use it
-        Object.assign(analyticsData, tunerInstance.getDetailedAnalytics());
-      } else {
-        // Otherwise, add some calculated fields based on existing data
-        
-        // Calculate search vs timeline breakdown if not already present
-        if (!analyticsData.searchTweetsAnalyzed && analyticsData.totalTweetsAnalyzed) {
-          analyticsData.searchTweetsAnalyzed = Math.round(analyticsData.totalTweetsAnalyzed * 0.7); // Example split
-          analyticsData.timelineTweetsAnalyzed = analyticsData.totalTweetsAnalyzed - analyticsData.searchTweetsAnalyzed;
-          
-          analyticsData.searchRelevant = Math.round(analyticsData.searchTweetsAnalyzed * (analyticsData.relevancePercentage / 100 * 0.6));
-          analyticsData.timelineRelevant = Math.round(analyticsData.timelineTweetsAnalyzed * (analyticsData.relevancePercentage / 100 * 1.4));
-        }
-        
-        // Calculate moving average if we have relevance history
-        if (analyticsData.relevanceHistory && analyticsData.relevanceHistory.length >= 5) {
-          const recentHistory = analyticsData.relevanceHistory.slice(-5);
-          analyticsData.movingAverage = recentHistory.reduce((sum, point) => sum + point.percentage, 0) / recentHistory.length;
-        }
-        
-        // Calculate short-term convergence rate
-        if (analyticsData.relevanceHistory && analyticsData.relevanceHistory.length >= 4) {
-          const lastFour = analyticsData.relevanceHistory.slice(-4);
-          const prevAvg = (lastFour[0].percentage + lastFour[1].percentage) / 2;
-          const currAvg = (lastFour[2].percentage + lastFour[3].percentage) / 2;
-          analyticsData.shortTermRate = currAvg - prevAvg;
-        }
-        
-        // Don't add mock data for top users
-        // We'll only display this section if analyticsData.topUsers actually exists
-        
-        // Don't add mock data for additional metrics
-        // Only use what's actually provided by the tuner
-      }
-      
-      return res.json({ success: true, data: analyticsData });
-    } else {
-      return res.json({ 
-        success: false, 
-        message: 'Timeline tuner not initialized',
-        data: {
-          elapsedMinutes: 0,
-          cycles: 0,
-          relevancePercentage: 0,
-          totalTweetsAnalyzed: 0
-        }
-      });
-    }
-  } catch (error) {
-    console.error('Error getting analytics:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Error getting analytics data',
-      error: error.message
-    });
-  }
-});
-
-// API endpoint specifically for activities
-app.get('/api/activities', (req, res) => {
-  try {
-    // Get tuner instance
-    const tunerInstance = req.app.locals.tuner;
-    
-    if (tunerInstance && tunerInstance.getRecentActivities) {
-      const activities = tunerInstance.getRecentActivities();
-      return res.json({ 
-        success: true, 
-        activities
-      });
-    } else {
-      return res.json({ 
-        success: false, 
-        message: 'No activity data available',
-        activities: []
-      });
-    }
-  } catch (error) {
-    console.error('Error getting activity data:', error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Error getting activity data',
-      error: error.message,
-      activities: []
-    });
-  }
-});
-
-app.get('/logout', async (req, res) => {
-  // Stop any running tuning
-  try {
-    const tunerInstance = req.app.locals.tuner;
-    if (tunerInstance && tunerInstance.isActive()) {
-      tunerInstance.stop();
-    }
-    
-    // Update database user active status
-    if (req.session.twitterId) {
-      await userDb.setUserActiveStatus(req.session.twitterId, false);
-    }
-  } catch (err) {
-    console.error('Error stopping tuner during logout:', err);
-  }
-  
-  req.session.destroy();
-  res.redirect('/');
-});
-
-// Start the server
 app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server is running on port ${PORT} and accessible on all network interfaces`);
+  console.log(`API server is running on port ${PORT}`);
 });

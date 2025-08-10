@@ -1,6 +1,6 @@
 {
-  "name": "agent-twitter-client",
-  "description": "A twitter client for agents",
+  "name": "agent-twitter-api",
+  "description": "Minimal API-only server exposing endpoints powered by agent-twitter-client",
   "keywords": [],
   "version": "0.0.18",
   "type": "module",
@@ -21,7 +21,6 @@
   "license": "MIT",
   "scripts": {
     "build": "rimraf dist && rollup -c",
-    "prepare": "npm run build",
     "docs:generate": "typedoc --options typedoc.json",
     "docs:deploy": "npm run docs:generate && gh-pages -d docs",
     "format": "prettier --write src/**/*.ts",
@@ -30,24 +29,19 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
-    "@prisma/client": "^6.5.0",
     "@sinclair/typebox": "^0.32.20",
+    "agent-twitter-client": "^0.0.18",
     "body-parser": "^1.20.3",
-    "cookie-parser": "^1.4.7",
-    "ejs": "^3.1.10",
+    "cors": "^2.8.5",
     "express": "^4.21.2",
     "express-session": "^1.18.1",
-    "headers-polyfill": "^3.1.2",
+    "headers-polyfill": "^3.3.0",
     "json-stable-stringify": "^1.0.2",
-    "node-fetch": "^3.3.2",
     "otpauth": "^9.2.2",
-    "prisma": "^6.5.0",
+    "pg": "^8.12.0",
     "set-cookie-parser": "^2.6.0",
     "tough-cookie": "^4.1.2",
-    "twitter-api-v2": "^1.18.2",
-    "undici": "^7.1.1",
-    "undici-types": "^7.2.0",
-    "ws": "^8.18.0"
+    "twitter-api-v2": "^1.18.2"
   },
   "devDependencies": {
     "@commitlint/cli": "^17.6.3",

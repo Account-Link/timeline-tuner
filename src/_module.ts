@@ -5,3 +5,7 @@ export type { QueryProfilesResponse, QueryTweetsResponse } from './timeline-v1.j
 export type { Tweet } from './tweets.js';
 
 export * from './types/spaces.js';
+
+// Additional exports for API usage
+export { getUserIdByScreenName } from './profile.js';
+export { fetchLikedTweets } from './tweets.js';

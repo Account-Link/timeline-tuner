@@ -50,24 +50,7 @@ export default [
       },
     ],
   },
-  {
-    input: 'src/prisma-client.ts',
-    plugins: [
-      esbuild({
-        define: {
-          PLATFORM_NODE: 'true',
-          PLATFORM_NODE_JEST: 'false',
-        },
-      }),
-    ],
-    output: [
-      {
-        file: 'dist/prisma-client.mjs',
-        format: 'es',
-        sourcemap: true,
-      },
-    ],
-  },
+  // Removed prisma client bundle
   {
     input: 'src/_module.ts',
     plugins: [dts()],
