@@ -907,6 +907,28 @@ export async function getTweet(
   return tweets.find((tweet) => tweet.id === id) ?? null;
 }
 
+/**
+ * Fetches the threaded conversation for a focal tweet id and returns all tweets in the conversation.
+ */
+export async function getConversationTweets(
+  id: string,
+  auth: TwitterAuth,
+): Promise<Tweet[]> {
+  const tweetDetailRequest = apiRequestFactory.createTweetDetailRequest();
+  tweetDetailRequest.variables.focalTweetId = id;
+
+  const res = await requestApi<ThreadedConversation>(
+    tweetDetailRequest.toRequestUrl(),
+    auth,
+  );
+
+  if (!res.success || !res.value) {
+    return [];
+  }
+
+  return parseThreadedConversation(res.value);
+}
+
 export async function getTweetV2(
   id: string,
   auth: TwitterAuth,

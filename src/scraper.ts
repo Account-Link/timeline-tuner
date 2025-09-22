@@ -41,6 +41,7 @@ import {
   getTweetsByUserId,
   TweetQuery,
   getTweet,
+  getConversationTweets,
   fetchListTweets,
   getTweetsAndRepliesByUserId,
   getTweetsAndReplies,
@@ -65,7 +66,7 @@ import {
   TimelineArticle,
   TimelineV2,
 } from './timeline-v2';
-import { fetchHomeTimeline, TweetWithFeedback } from './timeline-home';
+import { fetchHomeTimeline, TweetWithFeedback, HomeTimelinePage } from './timeline-home';
 import { fetchFollowingTimeline } from './timeline-following';
 import {
   TTweetv2Expansion,
@@ -308,8 +309,9 @@ export class Scraper {
   public async fetchHomeTimeline(
     count: number,
     seenTweetIds: string[],
-  ): Promise<TweetWithFeedback[]> {
-    return await fetchHomeTimeline(count, seenTweetIds, this.auth);
+    cursor?: string,
+  ): Promise<HomeTimelinePage> {
+    return await fetchHomeTimeline(count, seenTweetIds, this.auth, cursor);
   }
 
   /**
@@ -636,6 +638,13 @@ export class Scraper {
     } else {
       return getTweetAnonymous(id, this.auth);
     }
+  }
+
+  /**
+   * Fetch all tweets in the threaded conversation for a focal tweet id.
+   */
+  public async getConversation(id: string): Promise<Tweet[]> {
+    return await getConversationTweets(id, this.auth);
   }
 
   /**

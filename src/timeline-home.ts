@@ -46,11 +46,18 @@ export interface TweetWithFeedback {
   };
 }
 
+export interface HomeTimelinePage {
+  items: TweetWithFeedback[];
+  nextCursor?: string;
+  previousCursor?: string;
+}
+
 export async function fetchHomeTimeline(
   count: number,
   seenTweetIds: string[],
   auth: TwitterAuth,
-): Promise<TweetWithFeedback[]> {
+  cursor?: string,
+): Promise<HomeTimelinePage> {
   const variables = {
     count,
     includePromotedContent: true,
@@ -59,6 +66,11 @@ export async function fetchHomeTimeline(
     withCommunity: true,
     seenTweetIds,
   };
+
+  if (cursor) {
+    // Twitter HomeTimeline accepts a `cursor` for pagination
+    (variables as any).cursor = cursor;
+  }
 
   const features = {
     rweb_tipjar_consumption_enabled: true,
@@ -105,7 +117,7 @@ export async function fetchHomeTimeline(
   const home = res.value?.data?.home.home_timeline_urt;
   
   if (!home || !home.instructions) {
-    return [];
+    return { items: [] };
   }
 
   // Get feedback actions from response objects
@@ -117,10 +129,23 @@ export async function fetchHomeTimeline(
   }
 
   const entries: any[] = [];
+  let bottomCursor: string | undefined;
+  let topCursor: string | undefined;
 
   for (const instruction of home.instructions) {
     if (instruction.type === 'TimelineAddEntries') {
       for (const entry of instruction.entries ?? []) {
+        const content = entry?.content;
+        if (!content) continue;
+        // Capture cursors
+        if (content.cursorType === 'Bottom') {
+          bottomCursor = content.value || bottomCursor;
+          continue;
+        }
+        if (content.cursorType === 'Top') {
+          topCursor = content.value || topCursor;
+          continue;
+        }
         entries.push(entry);
       }
     }
@@ -164,5 +189,5 @@ export async function fetchHomeTimeline(
     tweetsWithFeedback.push(tweetWithFeedback);
   }
 
-  return tweetsWithFeedback;
+  return { items: tweetsWithFeedback, nextCursor: bottomCursor, previousCursor: topCursor };
 }
